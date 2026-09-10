@@ -1,0 +1,23 @@
+name: Validar app
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: node --check server.js
+      - run: node --check src/db.js
+      - run: node --check src/seed.js
+      - run: node --check src/routes/auth.routes.js
+      - run: node --check src/routes/os.routes.js
+      - run: node --check src/routes/notifications.routes.js
+      - run: node --check src/routes/tecnicos.routes.js

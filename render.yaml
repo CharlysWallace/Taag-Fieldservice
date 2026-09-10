@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: taag-fieldservice
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COOKIE_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: PGSSL
+        value: require

@@ -1,0 +1,20 @@
+{
+  "name": "fieldservice-backend",
+  "version": "1.0.0",
+  "description": "Backend do FieldService App (TAAG) — autenticação, ordens de serviço, cadastros pendentes e notificações.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node src/seed.js",
+    "db:init": "node src/init-db.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-session": "^2.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.13.1"
+  }
+}
