@@ -41,6 +41,11 @@ const notificationsRoutes = require('./src/routes/notifications.routes');
 
 const app = express();
 
+// Render encerra o HTTPS no proxy e encaminha a requisição para o Node.
+// Confiar no primeiro proxy permite que req.secure reconheça corretamente
+// o cabeçalho X-Forwarded-Proto=https e que cookies secure sejam enviados.
+app.set('trust proxy', 1);
+
 // aceita JSON grande o suficiente para uma foto em base64 + o resto do payload
 app.use(express.json({ limit: '8mb' }));
 
