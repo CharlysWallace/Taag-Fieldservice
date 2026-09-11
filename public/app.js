@@ -1,5 +1,5 @@
 /* Caminho do logo: mesma pasta do index.html (servida pelo backend em /public) */
-const LOGO_SRC = 'logo-taag.png';
+const LOGO_SRC = 'Taag30.png';
 
 /* ============================================================
    FIELDSERVICE APP — LÓGICA DA APLICAÇÃO
@@ -112,10 +112,11 @@ function back() {
   if (prev) { state.view = prev.view; state.params = prev.params; render(); }
 }
 async function logout() {
-  try { await apiLogout(); } catch (e) { /* mesmo se falhar, limpa o estado local abaixo */ }
+  try { await apiLogout(); } catch (e) { toast('Não foi possível sair. Verifique a conexão e tente novamente.'); return; }
   state.role = null; state.currentUser = null; state.currentTech = null; state.history = [];
   OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
-  nav('login');
+  state.view = 'login'; state.params = {};
+  render();
 }
 function roleLabel(p) { return { TECNICO: 'Técnico de Campo', ADMIN: 'Administrador', VISUALIZADOR: 'Visualizador (Gerente)' }[p] || p; }
 
@@ -172,7 +173,7 @@ function topbar(title, {showBack=true, rolePill=true, settings=false, settingsBa
   <div class="topbar">
     ${leftSlot}
     <h1>${title}</h1>
-    ${rolePill ? `<button class="icon-btn" data-nav="logout" title="Sair">${iconReturn()}</button>` : ''}
+    ${rolePill ? `<button class="icon-btn logout-btn" data-nav="logout" title="Sair do sistema" aria-label="Sair do sistema">${iconReturn()}<span>Sair</span></button>` : ''}
   </div>`;
 }
 
@@ -653,6 +654,7 @@ function screenSettings(){
 }
 
 const VIEWS = {
+  connection_error: () => `<div class="screen"><h1>Conexão indisponível</h1><p>Não foi possível carregar o sistema. Sua sessão foi mantida.</p><button class="btn btn-primary" id="retryConnection">Tentar novamente</button></div>`,
   login: screenLogin, tech_agenda: screenTechAgenda, tech_detail: screenTechDetail,
   tech_exec: screenTechExec, tech_signature: screenTechSignature, tech_report: screenTechReport,
   admin_panel: screenAdminPanel, admin_new: screenAdminNew, admin_detail: screenAdminDetail, admin_pending: screenAdminPending,
@@ -660,6 +662,7 @@ const VIEWS = {
 };
 
 function render(){
+  if (state.currentUser && state.view === 'login') state.view = rootScreenFor(state.role);
   document.getElementById('app').innerHTML = VIEWS[state.view]();
   bindEvents();
 }
@@ -669,6 +672,8 @@ function render(){
    ============================================================ */
 function bindEvents(){
   const app = document.getElementById('app');
+  const retry = document.getElementById('retryConnection');
+  if (retry) retry.onclick = () => location.reload();
 
   app.querySelectorAll('[data-nav="back"]').forEach(b=>b.onclick = back);
   app.querySelectorAll('[data-nav="logout"]').forEach(b=>b.onclick = logout);
@@ -1147,7 +1152,8 @@ function tickClock(){
     // 401 é o caso normal de "ninguém logado ainda" — qualquer outro erro
     // (rede) já avisa a pessoa que o backend pode não estar respondendo
     if(err.status !== 401) toast(err.message);
-    state.view = 'login';
+    if (err.status === 401) { state.currentUser = null; state.role = null; state.currentTech = null; }
+    state.view = err.status === 401 ? 'login' : 'connection_error';
   }
 
   await tempoMinimoSplash;

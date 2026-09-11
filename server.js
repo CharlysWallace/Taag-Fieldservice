@@ -63,12 +63,19 @@ app.use(
   cookieSession({
     name: 'fieldservice_session',
     secret: COOKIE_SECRET || 'dev-secret-troque-isso-em-producao',
-    maxAge: 12 * 60 * 60 * 1000, // 12 horas
+    maxAge: 400 * 24 * 60 * 60 * 1000, // persistente, renovado durante o uso
     httpOnly: true, // JavaScript do navegador não consegue ler este cookie (mitiga XSS)
     sameSite: 'lax', // mitiga CSRF básico mantendo login em navegação normal
     secure: process.env.NODE_ENV === 'production', // exige HTTPS em produção
   })
 );
+
+// Atualizar a sessão em cada requisição autenticada renova o cookie persistente.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  if (req.session.userId) req.session.renewedAt = Date.now();
+  next();
+});
 
 // 3) rotas da API
 app.use('/api/auth', authRoutes);

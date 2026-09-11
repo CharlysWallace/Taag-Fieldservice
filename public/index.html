@@ -22,21 +22,19 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="splash" id="splash" role="status" aria-label="Carregando o sistema">
+  <img src="Taag30.png" alt="TAAG 30 anos">
+  <div class="scan"></div>
+</div>
 
 <div class="phone-frame" id="phoneFrame">
   <div class="notch"></div>
 
-  <!-- splash: único momento de motion não-disparado por interação -->
-  <div class="splash" id="splash">
-    <img src="logo-taag.png" alt="TAAG">
-    <div class="scan"></div>
-  </div>
-
   <div class="status-bar">
-    <span id="clock">9:41</span>
+    <span id="clock">—</span>
     <div class="icons">
-      <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><path d="M1 8L1 10M4.5 6L4.5 10M8 4L8 10M11.5 2L11.5 10M15 1L15 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="1" y="1" width="18" height="9" rx="2" stroke="currentColor" stroke-width="1.2"/><rect x="2.5" y="2.5" width="14" height="6" rx="1" fill="currentColor"/><path d="M21 4V7" stroke="currentColor" stroke-width="1.2"/></svg>
+      <span id="connectionStatus" title="Estado de conexão informado pelo navegador">Rede —</span>
+      <span id="batteryStatus" title="Bateria indisponível neste navegador">Bateria —</span>
     </div>
   </div>
 
@@ -45,6 +43,7 @@
 </div>
 
 <!-- lógica do app, em arquivo próprio (mesma pasta do index.html) -->
+<script src="device-status.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
