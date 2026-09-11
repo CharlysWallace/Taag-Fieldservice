@@ -19,7 +19,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <!-- estilos do app, em arquivo próprio (mesma pasta do index.html) -->
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20260911-2">
 </head>
 <body>
 <div class="splash" id="splash" role="status" aria-label="Carregando o sistema">
@@ -39,11 +39,13 @@
   </div>
 
   <div id="app"></div>
+  <button id="sessionLogout" class="session-logout" hidden type="button">Sair do sistema</button>
   <div id="toast"></div>
 </div>
 
 <!-- lógica do app, em arquivo próprio (mesma pasta do index.html) -->
 <script src="device-status.js"></script>
-<script src="app.js"></script>
+<script src="report.js?v=20260911-2"></script>
+<script src="app.js?v=20260911-2"></script>
 </body>
 </html>
