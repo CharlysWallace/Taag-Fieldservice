@@ -75,6 +75,7 @@ const apiMarkNotificationsRead = () => api('/notificacoes/marcar-lidas', { metho
    Toda mutação (check-in, criar OS, aprovar cadastro…) atualiza o cache
    correspondente a partir da resposta do servidor, nunca "adivinhando"
    localmente o que deveria ter acontecido. */
+let ACCESS_CACHE = [];
 let TECNICOS = [];
 let OS_LIST = [];
 let PENDING_CACHE = [];
@@ -88,7 +89,8 @@ function updateOsCache(os) {
 
 /** Busca de uma vez tudo que as telas pós-login precisam — chamada após login e após restaurar sessão. */
 async function loadCoreData() {
-  const [tecRes, osRes, notifRes] = await Promise.all([apiGetTecnicos(), apiGetOS(), apiGetNotifications()]);
+  const [tecRes, osRes, notifRes, accessRes] = await Promise.all([apiGetTecnicos(), apiGetOS(), apiGetNotifications(), api('/acessos')]);
+  ACCESS_CACHE = accessRes.acessos;
   TECNICOS = tecRes.tecnicos;
   OS_LIST = osRes.ordens;
   NOTIF_CACHE = notifRes;
@@ -100,6 +102,9 @@ async function loadCoreData() {
 }
 
 /* ---------- 2. ESTADO DE NAVEGAÇÃO ---------- */
+const agendaFilters = { cliente: '', inicio: '', fim: '', status: '' };
+function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function localDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 const state = { role: null, currentUser: null, currentTech: null, view: 'login', params: {}, history: [] };
 
 function nav(view, params = {}) {
@@ -114,7 +119,8 @@ function back() {
 async function logout() {
   try { await apiLogout(); } catch (e) { toast('Não foi possível sair. Verifique a conexão e tente novamente.'); return; }
   state.role = null; state.currentUser = null; state.currentTech = null; state.history = [];
-  OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
+  ACCESS_CACHE = []; OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
+  Object.assign(agendaFilters, { cliente: '', inicio: '', fim: '', status: '' });
   state.view = 'login'; state.params = {};
   render();
 }
@@ -260,14 +266,15 @@ function screenLogin(){
 // (a filtragem "só as OS deste técnico" já vem pronta do backend — GET /api/os
 // escopa por sessão; o frontend só exibe o que o servidor mandou)
 function screenTechAgenda(){
-  const minhas = [...OS_LIST].sort((a,b)=> (a.data+a.hora).localeCompare(b.data+b.hora));
-  const hojeStr = new Date().toISOString().slice(0,10);
+  const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const minhas = OS_LIST.filter(o => normalize(o.cliente.nome).includes(normalize(agendaFilters.cliente.trim())) && (!agendaFilters.inicio || o.data >= agendaFilters.inicio) && (!agendaFilters.fim || o.data <= agendaFilters.fim) && (!agendaFilters.status || o.status === agendaFilters.status)).sort((a,b)=> (a.data+a.hora).localeCompare(b.data+b.hora));
+  const hojeStr = localDate();
   const hoje = minhas.filter(o=>o.data===hojeStr);
   const outras = minhas.filter(o=>o.data!==hojeStr);
 
   const card = o => `
     <div class="os-card st-${o.status}" data-open-os="${o.id}">
-      <div class="time">${o.hora}</div>
+      <div class="time">${o.hora}<small>${escapeHtml(o.data.split('-').reverse().join('/'))}</small></div>
       <div class="info" style="flex:1">
         <b>${o.cliente.nome}</b>
         <div class="addr">${iconPin()} ${o.cliente.endereco}</div>
@@ -279,6 +286,16 @@ function screenTechAgenda(){
   ${topbar('Olá, ' + state.currentTech.nome.split(' ')[0], {showBack:false, settings:true, settingsBadge:NOTIF_CACHE.naoLidas})}
   <div class="screen">
     <div class="scope-note">${iconLock()} Você vê apenas os atendimentos atribuídos a você</div>
+    <form id="agendaFilterForm" class="card agenda-filters">
+      <div class="field"><label for="agendaCliente">Buscar cliente</label><input id="agendaCliente" type="text" value="${escapeHtml(agendaFilters.cliente)}" placeholder="Nome do cliente"></div>
+      <div class="agenda-dates">
+        <div class="field"><label for="agendaInicio">Data inicial</label><input id="agendaInicio" type="date" value="${agendaFilters.inicio}"></div>
+        <div class="field"><label for="agendaFim">Data final</label><input id="agendaFim" type="date" value="${agendaFilters.fim}"></div>
+      </div>
+      <div class="field"><label for="agendaStatus">Status</label><select id="agendaStatus">${[['','Todos'],['PENDENTE','Pendente'],['EM_ANDAMENTO','Em andamento'],['CONCLUIDO','Concluído']].map(([value,label])=>`<option value="${value}" ${agendaFilters.status===value?'selected':''}>${label}</option>`).join('')}</select></div>
+      <div class="agenda-dates"><button class="btn btn-primary" type="submit">Filtrar agenda</button><button class="btn btn-outline" type="button" id="clearAgendaFilters">Limpar filtros</button></div>
+    </form>
+    <p role="status">${minhas.length} atendimento(s) encontrado(s)</p>
     <div class="section-label">Hoje</div>
     ${hoje.length ? hoje.map(card).join('') : `<div class="empty">Nenhum atendimento agendado para hoje.</div>`}
     ${outras.length ? `<div class="section-label">Outros dias</div>${outras.map(card).join('')}` : ''}
@@ -320,6 +337,28 @@ function screenTechDetail(){
   </div>`;
 }
 
+const REPORT_FIELDS = [
+  ['tipoChamado','Tipo de chamado',['Garantia','Assistência Técnica','Upgrade','Outros']],
+  ['sistemaCliente','Tipo de sistema do cliente'],
+  ['motivo','Motivo do atendimento'],
+  ['pendencias','Restaram pendências necessitando novo agendamento',['Não','Sim']],
+  ['pendenciasDescricao','Descrição das pendências'],
+  ['cameras','Sistema de câmeras',['Não se aplica','Somente câmeras (sem gravação)','NVR/DVR']],
+  ['gravacao','Configuração de gravação',['Não se aplica','Regular - contactar programador','Detecção de Movimento']],
+  ['gravacaoDescricao','Observações da gravação'],
+  ['limpeza','Necessária limpeza do rack e equipamentos',['Não','Sim']],
+  ['limpezaDescricao','Observações da limpeza'],
+  ['retirada','Retirada de equipamento para assistência técnica',['Não','Sim']],
+  ['retiradaDescricao','Equipamentos retirados: equipamento / marca / modelo / número de série'],
+  ['instalacao','Troca ou instalação de equipamentos',['Não','Sim']],
+  ['instalacaoDescricao','Equipamentos instalados: equipamento / marca / modelo / número de série'],
+  ['responsavel','Nome do responsável que acompanhou o atendimento']
+];
+function reportFields(o) {
+  const values = o.camposServico || {};
+  return `<details class="card report-fields"><summary>Preencher relatório de atendimento</summary>${REPORT_FIELDS.map(([key,label,options])=>`<div class="field"><label for="report-${key}">${label}</label>${options ? `<select id="report-${key}" data-report-field="${key}"><option value="">Não informado</option>${options.map(value=>`<option ${values[key]===value?'selected':''}>${value}</option>`).join('')}</select>` : `<textarea id="report-${key}" data-report-field="${key}" maxlength="4000">${escapeHtml(values[key])}</textarea>`}</div>`).join('')}</details>`;
+}
+
 // ---- 5c. TÉCNICO: execução do serviço (descrição + fotos) ----
 function screenTechExec(){
   const o = findOS(state.params.id);
@@ -336,6 +375,7 @@ function screenTechExec(){
       </button>
     </div>
 
+    ${reportFields(o)}
     <div class="section-label">Evidências do serviço</div><div class="photo-category"><label>Categoria da foto</label><select id="photoCategory"><option value="ANTES">📷 Antes do serviço</option><option value="DURANTE">📷 Durante o serviço</option><option value="DEPOIS">📷 Após a conclusão</option><option value="EQUIPAMENTOS">📷 Equipamentos utilizados</option></select></div><label class="photo-add">📷 Toque para anexar foto (câmera ou galeria)<input type="file" accept="image/*" id="photoInput" style="display:none;"></label>
     <div class="photo-grid" id="photoGrid">
       ${(o.fotos||[]).map((f,i)=>`<div class="thumb"><img src="${f.src}"><span class="photo-tag">${f.categoria}</span></div>`).join('')}
@@ -628,13 +668,20 @@ function screenSettings(){
     ` : ''}
 
     ${aba==='logins' ? `
-      <div class="card">
-        <div class="kv"><span class="k">E-mail de acesso</span><span class="v">${u.email}</span></div>
-        <div class="kv"><span class="k">Tipo</span><span class="v">${tipoLogin}</span></div>
-      </div>
-      <div style="font-size:12px; color:var(--text-muted); margin-top:12px; line-height:1.5;">
-        É este e-mail e senha que você usa para entrar no FieldService App — seja o e-mail corporativo da TAAG, um e-mail pessoal ou uma credencial criada especialmente para você pela empresa.
-      </div>
+      <div class="card"><b>Conta FieldService</b><p>${escapeHtml(u.email)}</p></div>
+      <h2>Acessos a softwares</h2>
+      <button class="btn btn-primary" id="addAccess" type="button">Adicionar informações de acesso</button>
+      <form id="accessForm" class="card" style="margin-top:12px" hidden>
+        <div class="field"><label for="accessSystem">Software / sistema</label><input id="accessSystem" type="text" maxlength="120" required></div>
+        <div class="field"><label for="accessUrl">Endereço do sistema (opcional)</label><input id="accessUrl" type="url" maxlength="1000" placeholder="https://"></div>
+        <div class="field"><label for="accessUser">Usuário / e-mail de acesso</label><input id="accessUser" type="text" maxlength="200" required autocomplete="off"></div>
+        <div class="field"><label for="accessNotes">Observações (opcional)</label><textarea id="accessNotes" maxlength="2000" placeholder="Informações sobre este acesso. Não inclua senhas."></textarea></div>
+        <p id="accessError" role="alert"></p>
+        <button class="btn btn-primary" type="submit">Salvar acesso</button>
+        <button class="btn btn-ghost" id="cancelAccess" type="button">Cancelar</button>
+      </form>
+      <p class="access-note">Estas informações ficam disponíveis apenas na sua conta.</p>
+      ${ACCESS_CACHE.length ? ACCESS_CACHE.map(a=>`<div class="card access-card"><h3>${escapeHtml(a.sistema)}</h3><p><b>Usuário:</b> ${escapeHtml(a.usuario)}</p>${a.endereco ? `<p><a href="${escapeHtml(a.endereco)}" target="_blank" rel="noopener noreferrer">Abrir sistema</a></p>` : ''}${a.observacoes ? `<p class="access-notes">${escapeHtml(a.observacoes)}</p>` : ''}</div>`).join('') : '<p>Nenhum acesso cadastrado.</p>'}
     ` : ''}
 
     ${aba==='notif' ? (minhasNotifs.length ? minhasNotifs.map(n=>`
@@ -664,6 +711,9 @@ const VIEWS = {
 function render(){
   if (state.currentUser && state.view === 'login') state.view = rootScreenFor(state.role);
   document.getElementById('app').innerHTML = VIEWS[state.view]();
+  const exitButton = document.getElementById('sessionLogout');
+  exitButton.hidden = !state.currentUser;
+  exitButton.onclick = logout;
   bindEvents();
 }
 
@@ -672,6 +722,32 @@ function render(){
    ============================================================ */
 function bindEvents(){
   const app = document.getElementById('app');
+  app.querySelectorAll('[data-report-field]').forEach(el => { el.oninput = () => { const o = findOS(state.params.id); o.camposServico ||= {}; o.camposServico[el.dataset.reportField] = el.value; }; });
+  const accessForm = document.getElementById('accessForm');
+  if (accessForm) {
+    document.getElementById('addAccess').onclick = () => { accessForm.hidden = false; document.getElementById('accessSystem').focus(); };
+    document.getElementById('cancelAccess').onclick = () => { accessForm.reset(); accessForm.hidden = true; document.getElementById('accessError').textContent = ''; };
+    accessForm.onsubmit = async event => {
+      event.preventDefault();
+      const submit = accessForm.querySelector('[type="submit"]'); submit.disabled = true;
+      try {
+        const { acesso } = await api('/acessos', { method: 'POST', body: { sistema: document.getElementById('accessSystem').value, endereco: document.getElementById('accessUrl').value, usuario: document.getElementById('accessUser').value, observacoes: document.getElementById('accessNotes').value } });
+        ACCESS_CACHE.push(acesso); render(); toast('Acesso salvo.');
+      } catch (err) { document.getElementById('accessError').textContent = err.message; submit.disabled = false; }
+    };
+  }
+  const filters = document.getElementById('agendaFilterForm');
+  if (filters) {
+    filters.onsubmit = event => {
+      event.preventDefault();
+      const inicio = document.getElementById('agendaInicio').value;
+      const fim = document.getElementById('agendaFim').value;
+      if (inicio && fim && inicio > fim) { toast('A data final deve ser igual ou posterior à inicial.'); return; }
+      Object.assign(agendaFilters, { cliente: document.getElementById('agendaCliente').value, inicio, fim, status: document.getElementById('agendaStatus').value });
+      render();
+    };
+    document.getElementById('clearAgendaFilters').onclick = () => { Object.assign(agendaFilters, { cliente: '', inicio: '', fim: '', status: '' }); render(); };
+  }
   const retry = document.getElementById('retryConnection');
   if (retry) retry.onclick = () => location.reload();
 
@@ -1072,7 +1148,7 @@ function setupSignaturePad(canvas, osId){
     try{
       const o = findOS(osId);
       const assinaturaDataUrl = canvas.toDataURL('image/png');
-      const { os } = await apiCheckout(osId, { descricao: o.descricao || '', camposServico: {}, assinatura: assinaturaDataUrl });
+      const { os } = await apiCheckout(osId, { descricao: o.descricao || '', camposServico: o.camposServico || {}, assinatura: assinaturaDataUrl });
       updateOsCache(os);
       toast('Atendimento concluído');
       nav('tech_report', { id: osId });
@@ -1084,49 +1160,13 @@ function setupSignaturePad(canvas, osId){
 }
 
 // ---- 7d. Geração de PDF (client-side, com os dados já carregados do backend) ----
-function gerarPDF(o){
+async function gerarPDF(o){
   if(!window.jspdf){ toast('Biblioteca de PDF ainda carregando — tente novamente em instantes.'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  let y = 20;
-  doc.setFont('helvetica','bold'); doc.setFontSize(16);
-  doc.text('TAAG · FieldService App — Relatório de Atendimento', 14, y); y+=6;
-  doc.setDrawColor(220); doc.line(14,y,196,y); y+=10;
-
-  doc.setFontSize(11); doc.setFont('helvetica','normal');
-  const linhas = [
-    ['Ordem de serviço', '#'+o.id.slice(-6)],
-    ['Cliente', o.cliente.nome],
-    ['Endereço', o.cliente.endereco],
-    ['Técnico responsável', o.tecnicoNome],
-    ['Tipo de serviço', serviceLabel(o.tipoServico)],
-    ['Check-in', o.checkin ? new Date(o.checkin.timestamp).toLocaleString('pt-BR') : '—'],
-    ['Check-out', o.checkout ? new Date(o.checkout.timestamp).toLocaleString('pt-BR') : '—'],
-    ['Duração', fmtDur(o.checkin?.timestamp, o.checkout?.timestamp)]
-  ];
-  linhas.forEach(([k,v])=>{ doc.setFont('helvetica','bold'); doc.text(k+':',14,y); doc.setFont('helvetica','normal'); doc.text(String(v),70,y); y+=8; });
-
-  y+=2; doc.setFont('helvetica','bold'); doc.text('Descrição do serviço:',14,y); y+=7;
-  doc.setFont('helvetica','normal');
-  const desc = doc.splitTextToSize(o.descricao || '—', 182);
-  doc.text(desc,14,y); y += desc.length*6 + 8;
-
-  const fotos = o.fotos || [];
-  if(fotos.length){
-    doc.setFont('helvetica','bold'); doc.text('Evidências fotográficas:',14,y); y+=6;
-    let x = 14;
-    fotos.slice(0,4).forEach(f=>{
-      if(y>250){ doc.addPage(); y=20; x=14; }
-      try{ doc.addImage(f.src,'JPEG',x,y,42,42); }catch(e){}
-      x += 46; if(x>150){ x=14; y+=46; }
-    });
-    y += 50;
-  }
-  if(y>230){ doc.addPage(); y=20; }
-  doc.setFont('helvetica','bold'); doc.text('Assinatura do cliente:',14,y); y+=4;
-  if(o.assinatura){ try{ doc.addImage(o.assinatura,'PNG',14,y,60,30); }catch(e){} }
-
-  doc.save('relatorio_' + o.cliente.nome.replace(/\s+/g,'_') + '_' + o.id.slice(-6) + '.pdf');
+  try {
+    const logo = await fetch(LOGO_SRC).then(res => { if (!res.ok) throw new Error('Logo indisponível'); return res.blob(); }).then(blob => new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); }));
+    const doc = buildTaagReport(window.jspdf.jsPDF, o, logo);
+    doc.save('relatorio_' + o.cliente.nome.replace(/\s+/g,'_') + '_' + o.id.slice(-6) + '.pdf');
+  } catch (err) { toast('Não foi possível gerar o relatório: ' + err.message); }
 }
 
 /* ============================================================
