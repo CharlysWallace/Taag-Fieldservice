@@ -110,8 +110,32 @@ async function closeDatabase() {
   if (pool) await pool.end();
 }
 
+// Serializa alterações da coleção para não perder cadastros simultâneos.
+const localMutations = new Map();
+async function mutateCollection(collection, change) {
+  if (!usePostgres) {
+    const previous = localMutations.get(collection) || Promise.resolve();
+    const pending = previous.catch(() => {}).then(async () => {
+      const items = await readCollection(collection); change(items); await writeCollection(collection, items);
+    });
+    localMutations.set(collection, pending);
+    try { await pending; } finally { if (localMutations.get(collection) === pending) localMutations.delete(collection); }
+    return;
+  }
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("INSERT INTO app_collections (collection_name, data) VALUES ($1, '[]'::jsonb) ON CONFLICT DO NOTHING", [collection]);
+    const result = await client.query('SELECT data FROM app_collections WHERE collection_name = $1 FOR UPDATE', [collection]);
+    const items = result.rows[0].data; change(items);
+    await client.query('UPDATE app_collections SET data = $2::jsonb, updated_at = NOW() WHERE collection_name = $1', [collection, JSON.stringify(items)]);
+    await client.query('COMMIT');
+  } catch (err) { await client.query('ROLLBACK'); throw err; } finally { client.release(); }
+}
+
 module.exports = {
   readCollection,
+  mutateCollection,
   writeCollection,
   genId,
   initDatabase,

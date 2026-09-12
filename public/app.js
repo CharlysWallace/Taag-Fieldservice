@@ -75,6 +75,7 @@ const apiMarkNotificationsRead = () => api('/notificacoes/marcar-lidas', { metho
    Toda mutação (check-in, criar OS, aprovar cadastro…) atualiza o cache
    correspondente a partir da resposta do servidor, nunca "adivinhando"
    localmente o que deveria ter acontecido. */
+let CLIENTES = [];
 let ACCESS_CACHE = [];
 let TECNICOS = [];
 let OS_LIST = [];
@@ -96,6 +97,7 @@ async function loadCoreData() {
   NOTIF_CACHE = notifRes;
   if (state.currentUser.perfil === 'ADMIN') {
     PENDING_CACHE = (await apiGetPending()).solicitacoes;
+    CLIENTES = (await api('/clientes')).clientes;
   } else {
     PENDING_CACHE = [];
   }
@@ -114,12 +116,14 @@ function nav(view, params = {}) {
 }
 function back() {
   const prev = state.history.pop();
-  if (prev) { state.view = prev.view; state.params = prev.params; render(); }
+  if (prev && prev.view !== 'login') { state.view = prev.view; state.params = prev.params; }
+  else { state.view = rootScreenFor(state.role); state.params = {}; }
+  render();
 }
 async function logout() {
   try { await apiLogout(); } catch (e) { toast('Não foi possível sair. Verifique a conexão e tente novamente.'); return; }
   state.role = null; state.currentUser = null; state.currentTech = null; state.history = [];
-  ACCESS_CACHE = []; OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
+  CLIENTES = []; ACCESS_CACHE = []; OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
   Object.assign(agendaFilters, { cliente: '', inicio: '', fim: '', status: '' });
   state.view = 'login'; state.params = {};
   render();
@@ -139,6 +143,7 @@ function rootScreenFor(perfil) {
 
 /* ---------- 3. HELPERS DE UI ---------- */
 function statusLabel(s){ return {PENDENTE:'Pendente', EM_ANDAMENTO:'Em andamento', CONCLUIDO:'Concluído'}[s]; }
+function osServiceLabel(o) { return o.tipoServico === 'PERSONALIZADO' ? escapeHtml(o.tipoServicoPersonalizado || 'Serviço personalizado') : serviceLabel(o.tipoServico); }
 function serviceLabel(v){ return ({INSTALACAO_REDE:'🌐 Instalação de rede',MANUTENCAO_WIFI:'📡 Manutenção de Wi‑Fi',INSTALACAO_CAMERAS:'📷 Instalação de câmeras',MANUTENCAO_PREVENTIVA:'🔧 Manutenção preventiva',SUPORTE:'💻 Suporte técnico',INSTALACAO_EQUIPAMENTOS:'🖥️ Instalação de equipamentos',INFRAESTRUTURA:'🔌 Infraestrutura',EMERGENCIAL:'⚠️ Atendimento emergencial'})[v]||'Serviço'; }
 function fmtTime(iso){ return iso ? new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—'; }
 function fmtDur(a,b){
@@ -171,7 +176,7 @@ function iconEye(off){ return off
 /* ---------- 4. TOPBAR REUTILIZÁVEL ---------- */
 function topbar(title, {showBack=true, rolePill=true, settings=false, settingsBadge=0} = {}){
   const leftSlot = showBack
-    ? `<button class="icon-btn" data-nav="back">${iconBack()}</button>`
+    ? `<button class="icon-btn back-btn" data-nav="back" aria-label="Voltar para a tela anterior">${iconBack()}<span>Voltar</span></button>`
     : (settings
         ? `<button class="icon-btn" data-nav="settings" title="Configurações" style="position:relative;">${iconSettings()}${settingsBadge>0?'<span class="topbar-dot"></span>':''}</button>`
         : `<div style="width:36px"></div>`);
@@ -179,7 +184,7 @@ function topbar(title, {showBack=true, rolePill=true, settings=false, settingsBa
   <div class="topbar">
     ${leftSlot}
     <h1>${title}</h1>
-    ${rolePill ? `<button class="icon-btn logout-btn" data-nav="logout" title="Sair do sistema" aria-label="Sair do sistema">${iconReturn()}<span>Sair</span></button>` : ''}
+    <button class="icon-btn notification-btn" data-notifications aria-label="Abrir notificações"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M9 21h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="notification-count">${NOTIF_CACHE.naoLidas || 0}</span></button>
   </div>`;
 }
 
@@ -276,8 +281,8 @@ function screenTechAgenda(){
     <div class="os-card st-${o.status}" data-open-os="${o.id}">
       <div class="time">${o.hora}<small>${escapeHtml(o.data.split('-').reverse().join('/'))}</small></div>
       <div class="info" style="flex:1">
-        <b>${o.cliente.nome}</b>
-        <div class="addr">${iconPin()} ${o.cliente.endereco}</div>
+        <b>${escapeHtml(o.cliente.nome)}</b>
+        <div class="addr">${iconPin()} ${escapeHtml(o.cliente.endereco)}</div>
         <div class="meta"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
       </div>
     </div>`;
@@ -310,14 +315,14 @@ function screenTechDetail(){
   ${topbar('Ordem de Serviço')}
   <div class="screen">
     <div class="card" style="margin-bottom:16px;">
-      <b style="font-size:17px;">${o.cliente.nome}</b>
-      <div style="color:var(--text-muted); font-size:13.5px; margin-top:6px; display:flex; gap:6px;">${iconPin()} ${o.cliente.endereco}</div>
-      <div style="color:var(--text-muted); font-size:13.5px; margin-top:4px;">📞 ${o.cliente.telefone}</div>
+      <b style="font-size:17px;">${escapeHtml(o.cliente.nome)}</b>
+      <div style="color:var(--text-muted); font-size:13.5px; margin-top:6px; display:flex; gap:6px;">${iconPin()} ${escapeHtml(o.cliente.endereco)}</div>
+      <div style="color:var(--text-muted); font-size:13.5px; margin-top:4px;">📞 ${escapeHtml(o.cliente.telefone)}</div>
       <div style="margin-top:12px;"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
     </div>
 
     <button class="btn btn-outline" id="routeBtn">📍 Como chegar?</button>
-    <div class="nav-modal" id="navModal" style="display:none"><div class="nav-modal-card"><button class="modal-close" id="closeNavModal">✕</button><h3>📍 ${o.cliente.nome}</h3><p>${o.cliente.endereco}</p><div class="nav-option" id="mapsOption">🗺️ <span><b>Google Maps</b><small>Abrir rota e navegação</small></span></div><div class="nav-option" id="uberOption">🚗 <span><b>Uber</b><small>Solicitar uma viagem até o cliente</small></span></div><div class="nav-option" id="n99Option">🚕 <span><b>99</b><small>Solicitar corrida</small></span></div><div class="nav-option" id="copyAddress">📋 <span><b>Copiar endereço</b><small>Utilizar em qualquer aplicativo</small></span></div></div></div>
+    <div class="nav-modal" id="navModal" style="display:none"><div class="nav-modal-card"><button class="modal-close" id="closeNavModal">✕</button><h3>📍 ${escapeHtml(o.cliente.nome)}</h3><p>${escapeHtml(o.cliente.endereco)}</p><div class="nav-option" id="mapsOption">🗺️ <span><b>Google Maps</b><small>Abrir rota e navegação</small></span></div><div class="nav-option" id="uberOption">🚗 <span><b>Uber</b><small>Solicitar uma viagem até o cliente</small></span></div><div class="nav-option" id="n99Option">🚕 <span><b>99</b><small>Solicitar corrida</small></span></div><div class="nav-option" id="copyAddress">📋 <span><b>Copiar endereço</b><small>Utilizar em qualquer aplicativo</small></span></div></div></div>
 
     ${already ? `
       <div class="section-label">Check-in Realizado</div>
@@ -365,7 +370,7 @@ function screenTechExec(){
   return `
   ${topbar('Execução do serviço')}
   <div class="screen">
-    <div class="section-label">Tipo de serviço</div><div class="card"><b>${serviceLabel(o.tipoServico)}</b><div class="service-fields" id="serviceFields">${o.tipoServico==='MANUTENCAO_WIFI'?'Modelo do equipamento · Quantidade de Access Points · SSID · Teste de conexão':o.tipoServico==='INSTALACAO_REDE'?'Pontos instalados · Equipamentos · Testes realizados':'Preencha os detalhes técnicos na descrição do atendimento.'}</div></div><div class="section-label">Descrição do atendimento</div>
+    <div class="section-label">Tipo de serviço</div><div class="card"><b>${osServiceLabel(o)}</b><div class="service-fields" id="serviceFields">${o.tipoServico==='MANUTENCAO_WIFI'?'Modelo do equipamento · Quantidade de Access Points · SSID · Teste de conexão':o.tipoServico==='INSTALACAO_REDE'?'Pontos instalados · Equipamentos · Testes realizados':'Preencha os detalhes técnicos na descrição do atendimento.'}</div></div><div class="section-label">Descrição do atendimento</div>
     <div class="desc-row">
       <div class="field">
         <textarea id="descField" placeholder="Descreva o serviço realizado…">${o.descricao||''}</textarea>
@@ -409,8 +414,8 @@ function screenTechReport(){
       <div style="font-size:13px; color:var(--text-muted);">OS #${o.id.slice(-6)}</div>
     </div>
     <div class="card">
-      <div class="kv"><span class="k">Cliente</span><span class="v">${o.cliente.nome}</span></div>
-      <div class="kv"><span class="k">Endereço</span><span class="v">${o.cliente.endereco}</span></div>
+      <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
+      <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
       <div class="kv"><span class="k">Técnico</span><span class="v">${o.tecnicoNome}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
@@ -444,6 +449,7 @@ function screenAdminPanel(){
 
   return `
   ${topbar('Painel administrativo', {showBack:false, settings:true, settingsBadge:NOTIF_CACHE.naoLidas})}
+  ${adminTabs('os')}
   <div class="screen" style="padding-bottom:90px;">
     <div class="scope-note">${iconLock()} Logado como ${state.currentUser.nome} · acesso total</div>
 
@@ -481,7 +487,7 @@ function screenAdminPanel(){
       <div class="os-card st-${o.status}" ${o.status==='CONCLUIDO' ? `data-open-admin="${o.id}"` : ''}>
         <div class="time">${o.hora}</div>
         <div class="info" style="flex:1">
-          <b>${o.cliente.nome}</b>
+          <b>${escapeHtml(o.cliente.nome)}</b>
           <div class="addr">${iconPin()} ${o.tecnicoNome} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
           <div class="meta" style="flex-wrap: wrap;">
             <span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span>
@@ -507,11 +513,11 @@ function screenAdminDetail(){
       <div style="font-size:13px; color:var(--text-muted);">OS #${o.id.slice(-6)}</div>
     </div>
     <div class="card">
-      <div class="kv"><span class="k">Cliente</span><span class="v">${o.cliente.nome}</span></div>
-      <div class="kv"><span class="k">Endereço</span><span class="v">${o.cliente.endereco}</span></div>
-      <div class="kv"><span class="k">E-mail do cliente</span><span class="v">${o.cliente.email || '—'}</span></div>
+      <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
+      <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
+      <div class="kv"><span class="k">E-mail do cliente</span><span class="v">${escapeHtml(o.cliente.email || '—')}</span></div>
       <div class="kv"><span class="k">Técnico</span><span class="v">${o.tecnicoNome}</span></div>
-      <div class="kv"><span class="k">Tipo de serviço</span><span class="v">${serviceLabel(o.tipoServico)}</span></div>
+      <div class="kv"><span class="k">Tipo de serviço</span><span class="v">${osServiceLabel(o)}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
       <div class="kv"><span class="k">Duração</span><span class="v">${fmtDur(o.checkin?.timestamp, o.checkout?.timestamp)}</span></div>
@@ -547,23 +553,38 @@ function screenAdminPending(){
   </div>`;
 }
 
+function adminTabs(active) {
+  return `<nav class="admin-tabs" aria-label="Administração"><button class="settings-tab ${active==='os'?'active':''}" data-nav="admin_panel">Ordens de serviço</button><button class="settings-tab ${active==='clientes'?'active':''}" data-nav="admin_clientes">Clientes</button></nav>`;
+}
+function screenClientes() {
+  const editing = CLIENTES.find(c => c.id === state.params.editId);
+  const form = state.params.newClient || editing;
+  const fields = [['nome','Nome'],['endereco','Endereço'],['telefone','Telefone de contato'],['tipoSistema','Tipo do sistema'],['email','E-mail (opcional)']];
+  return `${topbar('Cadastro de clientes')}${adminTabs('clientes')}<div class="screen">
+    <button class="btn btn-primary" id="newClientBtn">Cadastrar cliente</button>
+    ${form ? `<form id="clientForm" class="card client-form"><h2>${editing?'Editar cliente':'Novo cliente'}</h2>${fields.map(([key,label])=>`<div class="field"><label for="client-${key}">${label}</label><input id="client-${key}" type="${key==='telefone'?'tel':key==='email'?'email':'text'}" maxlength="${key==='endereco'?700:key==='tipoSistema'?500:key==='telefone'?80:key==='nome'?180:200}" ${key==='email'?'':'required'} value="${escapeHtml(editing?.[key])}"></div>`).join('')}<p id="clientError" role="alert"></p><button class="btn btn-primary" type="submit">Salvar cliente</button><button class="btn btn-ghost" id="cancelClient" type="button">Cancelar</button></form>` : ''}
+    <div class="field"><label for="clientSearch">Buscar cliente cadastrado</label><input id="clientSearch" type="text" placeholder="Nome do cliente"></div>
+    <div id="clientList">${CLIENTES.map(c=>`<article class="card client-card" data-client-name="${escapeHtml(c.nome.toLocaleLowerCase('pt-BR'))}"><h3>${escapeHtml(c.nome)}</h3><p>${escapeHtml(c.endereco)}</p><p>${escapeHtml(c.telefone)}</p><p><b>Sistema:</b> ${escapeHtml(c.tipoSistema || 'Não informado')}</p><button class="btn btn-outline" data-edit-client="${escapeHtml(c.id)}">Editar dados</button></article>`).join('')}</div><p id="clientEmpty" ${CLIENTES.length?'hidden':''}>Nenhum cliente encontrado.</p>
+  </div>`;
+}
+
 // ---- 5g. ADMIN: nova OS (cadastro de cliente + agendamento) ----
 function screenAdminNew(){
   return `
   ${topbar('Nova ordem de serviço')}
   <div class="screen">
-    <div class="section-label">Dados do cliente</div>
-    <div class="field"><label>Nome do cliente</label><input type="text" id="fNome" placeholder="Ex: Padaria Estrela"></div>
-    <div class="field"><label>Endereço completo</label><input type="text" id="fEndereco" placeholder="Rua, número, bairro, cidade"></div>
-    <div class="field"><label>Telefone</label><input type="tel" id="fTelefone" placeholder="(00) 00000-0000"></div>
-    <div class="field"><label>E-mail do cliente (para envio de relatórios)</label><input type="text" id="fEmailCliente" placeholder="cliente@empresa.com"></div>
+    <div class="section-label">Cliente cadastrado</div>
+    <div class="field"><label for="osClientSearch">Buscar pelo nome</label><input id="osClientSearch" type="text" placeholder="Digite o nome do cliente"></div>
+    <div class="field"><label for="osClient">Selecione o cliente</label><select id="osClient"><option value="">Selecione...</option>${CLIENTES.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.nome)} — ${escapeHtml(c.endereco)}</option>`).join('')}</select></div>
+    <div class="card" id="osClientDetails">Selecione um cliente para carregar os dados.</div>
+    <button class="btn btn-ghost" data-nav="admin_clientes">Abrir cadastro de clientes</button>
 
-    <div class="section-label">Tipo de serviço</div><div class="field"><label>Serviço</label><select id="fTipoServico"><option value="INSTALACAO_REDE">🌐 Instalação de rede</option><option value="MANUTENCAO_WIFI">📡 Manutenção de Wi‑Fi</option><option value="INSTALACAO_CAMERAS">📷 Instalação de câmeras</option><option value="MANUTENCAO_PREVENTIVA">🔧 Manutenção preventiva</option><option value="SUPORTE">💻 Suporte técnico</option><option value="INSTALACAO_EQUIPAMENTOS">🖥️ Instalação de equipamentos</option><option value="INFRAESTRUTURA">🔌 Infraestrutura</option><option value="EMERGENCIAL">⚠️ Atendimento emergencial</option></select></div><div class="section-label">Agendamento</div>
+    <div class="section-label">Tipo de serviço</div><div class="field"><label>Serviço</label><select id="fTipoServico"><option value="INSTALACAO_REDE">🌐 Instalação de rede</option><option value="MANUTENCAO_WIFI">📡 Manutenção de Wi‑Fi</option><option value="INSTALACAO_CAMERAS">📷 Instalação de câmeras</option><option value="MANUTENCAO_PREVENTIVA">🔧 Manutenção preventiva</option><option value="SUPORTE">💻 Suporte técnico</option><option value="INSTALACAO_EQUIPAMENTOS">🖥️ Instalação de equipamentos</option><option value="INFRAESTRUTURA">🔌 Infraestrutura</option><option value="EMERGENCIAL">⚠️ Atendimento emergencial</option><option value="PERSONALIZADO">Outro — escrever tipo de serviço</option></select></div><div class="field" id="customServiceField" hidden><label for="customService">Tipo de serviço a prestar</label><input id="customService" type="text" maxlength="300" placeholder="Descreva o tipo de serviço"></div><div class="section-label">Agendamento</div>
     <div class="field"><label>Técnico responsável</label>
       <select id="fTecnico">${TECNICOS.map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}</select>
     </div>
     <div style="display:flex; gap:10px;">
-      <div class="field" style="flex:1"><label>Data</label><input type="date" id="fData" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field" style="flex:1"><label>Data</label><input type="date" id="fData" value="${localDate()}"></div>
       <div class="field" style="flex:1"><label>Horário</label><input type="time" id="fHora" value="09:00"></div>
     </div>
 
@@ -612,7 +633,7 @@ function screenDashboard(){
       <div class="os-card st-${o.status}" data-view-os="${o.id}">
         <div class="time">${o.hora}</div>
         <div class="info" style="flex:1">
-          <b>${o.cliente.nome}</b>
+          <b>${escapeHtml(o.cliente.nome)}</b>
           <div class="addr">${iconPin()} ${o.tecnicoNome} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
           <div class="meta"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
         </div>
@@ -627,8 +648,8 @@ function screenViewDetail(){
   ${topbar('Detalhe da OS')}
   <div class="screen">
     <div class="card">
-      <div class="kv"><span class="k">Cliente</span><span class="v">${o.cliente.nome}</span></div>
-      <div class="kv"><span class="k">Endereço</span><span class="v">${o.cliente.endereco}</span></div>
+      <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
+      <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
       <div class="kv"><span class="k">Técnico</span><span class="v">${o.tecnicoNome}</span></div>
       <div class="kv"><span class="k">Status</span><span class="v">${statusLabel(o.status)}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
@@ -704,7 +725,7 @@ const VIEWS = {
   connection_error: () => `<div class="screen"><h1>Conexão indisponível</h1><p>Não foi possível carregar o sistema. Sua sessão foi mantida.</p><button class="btn btn-primary" id="retryConnection">Tentar novamente</button></div>`,
   login: screenLogin, tech_agenda: screenTechAgenda, tech_detail: screenTechDetail,
   tech_exec: screenTechExec, tech_signature: screenTechSignature, tech_report: screenTechReport,
-  admin_panel: screenAdminPanel, admin_new: screenAdminNew, admin_detail: screenAdminDetail, admin_pending: screenAdminPending,
+  admin_clientes: screenClientes, admin_panel: screenAdminPanel, admin_new: screenAdminNew, admin_detail: screenAdminDetail, admin_pending: screenAdminPending,
   view_dashboard: screenDashboard, view_detail: screenViewDetail, settings: screenSettings
 };
 
@@ -723,6 +744,48 @@ function render(){
 function bindEvents(){
   const app = document.getElementById('app');
   app.querySelectorAll('[data-report-field]').forEach(el => { el.oninput = () => { const o = findOS(state.params.id); o.camposServico ||= {}; o.camposServico[el.dataset.reportField] = el.value; }; });
+  app.querySelectorAll('[data-notifications]').forEach(b => b.onclick = async () => {
+    try { NOTIF_CACHE = await apiGetNotifications(); await apiMarkNotificationsRead(); NOTIF_CACHE.naoLidas = 0; nav('settings', { aba: 'notif' }); }
+    catch (err) { toast(err.message); }
+  });
+  const newClient = document.getElementById('newClientBtn');
+  if (newClient) {
+    newClient.onclick = () => { state.params = { newClient: true }; render(); };
+    app.querySelectorAll('[data-edit-client]').forEach(b => b.onclick = () => { state.params = { editId: b.dataset.editClient }; render(); });
+    document.getElementById('clientSearch').oninput = event => {
+      const term = event.target.value.trim().toLocaleLowerCase('pt-BR'); let count = 0;
+      app.querySelectorAll('[data-client-name]').forEach(card => { card.hidden = !card.dataset.clientName.includes(term); if (!card.hidden) count++; });
+      document.getElementById('clientEmpty').hidden = count > 0;
+    };
+    const form = document.getElementById('clientForm');
+    if (form) {
+      document.getElementById('cancelClient').onclick = () => { state.params = {}; render(); };
+      form.onsubmit = async event => {
+        event.preventDefault(); const editId = state.params.editId; const button = form.querySelector('[type="submit"]'); button.disabled = true;
+        const body = Object.fromEntries(['nome','endereco','telefone','tipoSistema','email'].map(key => [key, document.getElementById('client-'+key).value.trim()]));
+        try {
+          const { cliente } = await api('/clientes' + (editId ? '/' + encodeURIComponent(editId) : ''), { method: editId ? 'PUT' : 'POST', body });
+          const i = CLIENTES.findIndex(c => c.id === cliente.id); if (i < 0) CLIENTES.push(cliente); else CLIENTES[i] = cliente;
+          state.params = {}; render(); toast('Cliente salvo no cadastro.');
+        } catch (err) { document.getElementById('clientError').textContent = err.message; button.disabled = false; }
+      };
+    }
+  }
+  const clientSelect = document.getElementById('osClient');
+  if (clientSelect) {
+    clientSelect.onchange = () => {
+      const c = CLIENTES.find(item => item.id === clientSelect.value);
+      document.getElementById('osClientDetails').innerHTML = c ? `<b>${escapeHtml(c.nome)}</b><p>${escapeHtml(c.endereco)}</p><p>${escapeHtml(c.telefone)}</p><p>Sistema: ${escapeHtml(c.tipoSistema || 'Não informado')}</p>` : 'Selecione um cliente para carregar os dados.';
+    };
+    document.getElementById('osClientSearch').oninput = event => {
+      const term = event.target.value.trim().toLocaleLowerCase('pt-BR');
+      const matches = CLIENTES.filter(c => c.nome.toLocaleLowerCase('pt-BR').includes(term));
+      clientSelect.innerHTML = '<option value="">Selecione...</option>' + matches.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.nome)} — ${escapeHtml(c.endereco)}</option>`).join('');
+      if (matches.length === 1) clientSelect.value = matches[0].id;
+      clientSelect.onchange();
+    };
+    document.getElementById('fTipoServico').onchange = event => { document.getElementById('customServiceField').hidden = event.target.value !== 'PERSONALIZADO'; };
+  }
   const accessForm = document.getElementById('accessForm');
   if (accessForm) {
     document.getElementById('addAccess').onclick = () => { accessForm.hidden = false; document.getElementById('accessSystem').focus(); };
@@ -951,7 +1014,7 @@ function bindEvents(){
     const corpo = encodeURIComponent(
       'Olá,\n\nSegue o relatório do atendimento realizado em ' +
       (o.checkout ? new Date(o.checkout.timestamp).toLocaleDateString('pt-BR') : '—') +
-      ' (' + serviceLabel(o.tipoServico) + ').\n\n' +
+      ' (' + osServiceLabel(o) + ').\n\n' +
       'Obs: baixe o PDF pelo botão "Baixar relatório em PDF" e anexe-o a este e-mail antes de enviar.\n\nAtenciosamente,\nEquipe TAAG'
     );
     window.open(`mailto:${o.cliente.email}?subject=${assunto}&body=${corpo}`, '_blank', 'noopener,noreferrer');
@@ -1005,20 +1068,17 @@ function bindEvents(){
 
   const saveOsBtn = document.getElementById('saveOsBtn');
   if(saveOsBtn) saveOsBtn.onclick = async ()=>{
-    const nome = document.getElementById('fNome').value.trim();
-    const endereco = document.getElementById('fEndereco').value.trim();
-    if(!nome || !endereco){ toast('Preencha nome e endereço do cliente'); return; }
+    const clienteId = document.getElementById('osClient').value;
+    const tipoServico = document.getElementById('fTipoServico').value;
+    const tipoServicoPersonalizado = document.getElementById('customService').value.trim();
+    if (!clienteId) { toast('Selecione um cliente cadastrado.'); return; }
+    if (tipoServico === 'PERSONALIZADO' && !tipoServicoPersonalizado) { toast('Escreva o tipo de serviço.'); return; }
 
     saveOsBtn.disabled = true;
     try{
       const { os } = await apiCreateOS({
-        clienteNovo: {
-          nome, endereco,
-          telefone: document.getElementById('fTelefone').value.trim(),
-          email: document.getElementById('fEmailCliente').value.trim(),
-        },
+        clienteId, tipoServico, tipoServicoPersonalizado,
         tecnicoId: document.getElementById('fTecnico').value,
-        tipoServico: document.getElementById('fTipoServico').value,
         data: document.getElementById('fData').value,
         hora: document.getElementById('fHora').value,
       });
@@ -1201,3 +1261,19 @@ function tickClock(){
   tickClock(); setInterval(tickClock, 30000);
   document.getElementById('splash').style.display = 'none';
 })();
+
+let notificationRefreshBusy = false;
+async function refreshNotificationBadge() {
+  if (!state.currentUser || document.hidden || notificationRefreshBusy) return;
+  const userId = state.currentUser.id; notificationRefreshBusy = true;
+  try {
+    const data = await apiGetNotifications();
+    if (state.currentUser?.id !== userId) return;
+    NOTIF_CACHE = data;
+    document.querySelectorAll('.notification-count').forEach(el => { el.textContent = data.naoLidas || 0; });
+  } catch { /* O próximo ciclo tenta novamente, sem interromper o atendimento. */ }
+  finally { notificationRefreshBusy = false; }
+}
+setInterval(refreshNotificationBadge, 30000);
+document.addEventListener('visibilitychange', () => { tickClock(); refreshNotificationBadge(); });
+window.addEventListener('online', refreshNotificationBadge);

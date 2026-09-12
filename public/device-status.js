@@ -8,6 +8,11 @@
     networkEl.textContent = navigator.onLine === false ? 'Offline' : (types[connection?.type] || 'Online');
     networkEl.title = 'Conexão informada pelo aparelho; intensidade do sinal indisponível na web. Não garante acesso ao servidor.';
   }
+  const info = document.getElementById('deviceInfo');
+  if (info) info.onclick = () => {
+    const help = document.getElementById('deviceHelp'); help.hidden = !help.hidden;
+    info.setAttribute('aria-expanded', String(!help.hidden));
+  };
   updateConnection();
   window.addEventListener('online', updateConnection);
   window.addEventListener('offline', updateConnection);
