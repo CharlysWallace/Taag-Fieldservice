@@ -38,7 +38,7 @@ async function getOsById(id) {
 
 /** Junta a OS com os dados do cliente e do técnico — o frontend não precisa fazer join nenhum. */
 async function comDadosRelacionados(os) {
-  const cliente = (await readCollection('clientes')).find((c) => c.id === os.clienteId) || null;
+  const cliente = os.clienteSnapshot || (await readCollection('clientes')).find((c) => c.id === os.clienteId) || null;
   const tecnico = (await readCollection('tecnicos')).find((t) => t.id === os.tecnicoId) || null;
   return { ...os, cliente, tecnicoNome: tecnico ? tecnico.nome : '—' };
 }
@@ -67,31 +67,27 @@ router.get('/:id', requireAuth, requireOwnOsOrElevated(getOsById), async (req, r
 
 // ---------- POST /api/os (somente ADMIN) ----------
 router.post('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
-  const { clienteNovo, clienteId, tecnicoId, tipoServico, data, hora } = req.body || {};
+  const { clienteId, tecnicoId, tipoServico, tipoServicoPersonalizado, data, hora } = req.body || {};
   if (!tecnicoId || !data || !hora) {
     return res.status(400).json({ erro: 'Preencha técnico, data e horário.' });
   }
 
-  let clienteFinalId = clienteId;
-
-  // aceita tanto um clienteId já existente quanto os dados de um cliente novo
-  // (nome/endereco/telefone/email) — o admin cadastra o cliente na mesma tela
-  if (!clienteFinalId && clienteNovo && clienteNovo.nome && clienteNovo.endereco) {
-    const clientes = await readCollection('clientes');
-    clienteFinalId = genId('c');
-    clientes.push({ id: clienteFinalId, ...clienteNovo });
-    await writeCollection('clientes', clientes);
-  }
-  if (!clienteFinalId) {
-    return res.status(400).json({ erro: 'Informe um cliente existente ou os dados de um cliente novo.' });
-  }
+  const cliente = (await readCollection('clientes')).find(c => c.id === clienteId);
+  if (!cliente) return res.status(400).json({ erro: 'Selecione um cliente cadastrado na aba Clientes.' });
+  if (!(await readCollection('tecnicos')).some(t => t.id === tecnicoId)) return res.status(400).json({ erro: 'Técnico inválido.' });
+  const tipos = ['INSTALACAO_REDE','MANUTENCAO_WIFI','INSTALACAO_CAMERAS','MANUTENCAO_PREVENTIVA','SUPORTE','INSTALACAO_EQUIPAMENTOS','INFRAESTRUTURA','EMERGENCIAL','PERSONALIZADO'];
+  if (!tipos.includes(tipoServico)) return res.status(400).json({ erro: 'Tipo de serviço inválido.' });
+  if (tipoServico === 'PERSONALIZADO' && (typeof tipoServicoPersonalizado !== 'string' || !tipoServicoPersonalizado.trim() || tipoServicoPersonalizado.length > 300)) return res.status(400).json({ erro: 'Descreva o tipo de serviço em até 300 caracteres.' });
 
   const ordens = await readCollection('ordens_servico');
   const novaOs = {
     id: genId('os'),
-    clienteId: clienteFinalId,
+    clienteId,
+    clienteSnapshot: { ...cliente },
+    camposServico: { sistemaCliente: cliente.tipoSistema || '' },
     tecnicoId,
-    tipoServico: tipoServico || 'suporte',
+    tipoServico,
+    tipoServicoPersonalizado: tipoServico === 'PERSONALIZADO' ? tipoServicoPersonalizado.trim() : '',
     data,
     hora,
     status: 'PENDENTE',

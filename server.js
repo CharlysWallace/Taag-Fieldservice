@@ -79,6 +79,7 @@ app.use('/api', (req, res, next) => {
 
 // 3) rotas da API
 app.use('/api/auth', authRoutes);
+app.use('/api/clientes', require('./src/routes/clientes.routes'));
 app.use('/api/acessos', require('./src/routes/access.routes'));
 app.use('/api/os', osRoutes);
 app.use('/api/tecnicos', tecnicosRoutes);
