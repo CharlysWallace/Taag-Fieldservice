@@ -78,9 +78,12 @@ app.use('/api', (req, res, next) => {
 });
 
 // 3) rotas da API
+app.use('/api/password', require('./src/routes/password.routes'));
 app.use('/api/auth', authRoutes);
 app.use('/api/clientes', require('./src/routes/clientes.routes'));
 app.use('/api/acessos', require('./src/routes/access.routes'));
+app.use('/api/help', require('./src/routes/help.routes'));
+app.use('/api/dashboard', require('./src/routes/dashboard.routes'));
 app.use('/api/os', osRoutes);
 app.use('/api/tecnicos', tecnicosRoutes);
 app.use('/api/notificacoes', notificationsRoutes);
@@ -101,7 +104,7 @@ app.get(/^(?!\/api\/).*/, (req, res) => {
 
 // captura erros que passaram batido pelas rotas, pra nunca devolver um HTML de stack trace
 app.use((err, req, res, next) => {
-  console.error('[server] Erro não tratado:', err);
+  console.error('[server] Falha:', err.name, err.status || 500);
   res.status(500).json({ erro: 'Erro interno do servidor.' });
 });
 

@@ -82,7 +82,7 @@ let OS_LIST = [];
 let PENDING_CACHE = [];
 let NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
 
-function findOS(id) { return OS_LIST.find(o => o.id === id); }
+function findOS(id) { return reportDraft?.id === id ? reportDraft : OS_LIST.find(o => o.id === id); }
 function updateOsCache(os) {
   const idx = OS_LIST.findIndex(o => o.id === os.id);
   if (idx >= 0) OS_LIST[idx] = os; else OS_LIST.push(os);
@@ -90,6 +90,7 @@ function updateOsCache(os) {
 
 /** Busca de uma vez tudo que as telas pós-login precisam — chamada após login e após restaurar sessão. */
 async function loadCoreData() {
+  if (state.currentUser.perfil === 'VISUALIZADOR') { const d = await api('/dashboard'); TECNICOS=d.tecnicos; OS_LIST=d.ordens; ACCESS_CACHE=[]; PENDING_CACHE=[]; NOTIF_CACHE={naoLidas:0,notificacoes:[]}; return; }
   const [tecRes, osRes, notifRes, accessRes] = await Promise.all([apiGetTecnicos(), apiGetOS(), apiGetNotifications(), api('/acessos')]);
   ACCESS_CACHE = accessRes.acessos;
   TECNICOS = tecRes.tecnicos;
@@ -121,7 +122,9 @@ function back() {
   render();
 }
 async function logout() {
+  closeHelp();
   try { await apiLogout(); } catch (e) { toast('Não foi possível sair. Verifique a conexão e tente novamente.'); return; }
+  dashboardData = null; reportDraft = null;
   state.role = null; state.currentUser = null; state.currentTech = null; state.history = [];
   CLIENTES = []; ACCESS_CACHE = []; OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
   Object.assign(agendaFilters, { cliente: '', inicio: '', fim: '', status: '' });
@@ -197,7 +200,7 @@ function screenLogin(){
   <div class="screen" style="padding-top:32px;">
     <div style="text-align:center; margin-bottom:26px;">
       <div class="login-logo"><img src="${LOGO_SRC}" alt="TAAG"></div>
-      <div style="color:var(--text-muted); font-size:13px; margin-top:10px;">FieldService App · Gestão de Equipes de Campo</div>
+      <div style="color:var(--text-muted); font-size:13px; margin-top:10px;">The Automation Association Group</div>
     </div>
 
     <form id="loginForm" autocomplete="off">
@@ -224,6 +227,7 @@ function screenLogin(){
       </button>
     </form>
 
+    <button type="button" class="btn btn-ghost" data-nav="password">Esqueci minha senha / Redefinir senha</button>
     <div class="auth-switch" id="goToRegister">Ainda não tem conta? <b>Cadastre-se</b></div>
 
     <form id="registerForm" autocomplete="off" style="display:none;">
@@ -282,7 +286,7 @@ function screenTechAgenda(){
       <div class="time">${o.hora}<small>${escapeHtml(o.data.split('-').reverse().join('/'))}</small></div>
       <div class="info" style="flex:1">
         <b>${escapeHtml(o.cliente.nome)}</b>
-        <div class="addr">${iconPin()} ${escapeHtml(o.cliente.endereco)}</div>
+        <div class="addr">${iconPin()} ${escapeHtml(o.cliente.endereco)}</div><div class="addr">Equipe: ${escapeHtml(o.tecnicoNome)}</div>
         <div class="meta"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
       </div>
     </div>`;
@@ -300,7 +304,7 @@ function screenTechAgenda(){
       <div class="field"><label for="agendaStatus">Status</label><select id="agendaStatus">${[['','Todos'],['PENDENTE','Pendente'],['EM_ANDAMENTO','Em andamento'],['CONCLUIDO','Concluído']].map(([value,label])=>`<option value="${value}" ${agendaFilters.status===value?'selected':''}>${label}</option>`).join('')}</select></div>
       <div class="agenda-dates"><button class="btn btn-primary" type="submit">Filtrar agenda</button><button class="btn btn-outline" type="button" id="clearAgendaFilters">Limpar filtros</button></div>
     </form>
-    <p role="status">${minhas.length} atendimento(s) encontrado(s)</p>
+    <button class="btn btn-outline" id="refreshAgenda">Atualizar agenda</button><p role="status">${minhas.length} atendimento(s) encontrado(s)</p>
     <div class="section-label">Hoje</div>
     ${hoje.length ? hoje.map(card).join('') : `<div class="empty">Nenhum atendimento agendado para hoje.</div>`}
     ${outras.length ? `<div class="section-label">Outros dias</div>${outras.map(card).join('')}` : ''}
@@ -330,7 +334,7 @@ function screenTechDetail(){
         <div class="kv"><span class="k">Horário</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       </div>
       <button class="btn btn-primary" style="margin-top:16px;" id="continueBtn">
-        ${o.status==='EM_ANDAMENTO' ? 'Continuar atendimento' : 'Ver relatório'}
+        ${o.status==='EM_ANDAMENTO' ? (ownsReport(o)?'Continuar atendimento':'Acompanhar atendimento') : 'Ver relatório'}
       </button>
     ` : `
       <div class="section-label">Iniciar Atendimento</div>
@@ -373,7 +377,7 @@ function screenTechExec(){
     <div class="section-label">Tipo de serviço</div><div class="card"><b>${osServiceLabel(o)}</b><div class="service-fields" id="serviceFields">${o.tipoServico==='MANUTENCAO_WIFI'?'Modelo do equipamento · Quantidade de Access Points · SSID · Teste de conexão':o.tipoServico==='INSTALACAO_REDE'?'Pontos instalados · Equipamentos · Testes realizados':'Preencha os detalhes técnicos na descrição do atendimento.'}</div></div><div class="section-label">Descrição do atendimento</div>
     <div class="desc-row">
       <div class="field">
-        <textarea id="descField" placeholder="Descreva o serviço realizado…">${o.descricao||''}</textarea>
+        <textarea id="descField" placeholder="Descreva o serviço realizado…">${escapeHtml(o.descricao||'')}</textarea>
       </div>
       <button class="mic-btn" id="micBtn" title="Ditar por voz">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -416,13 +420,13 @@ function screenTechReport(){
     <div class="card">
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
       <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
-      <div class="kv"><span class="k">Técnico</span><span class="v">${o.tecnicoNome}</span></div>
+      <div class="kv"><span class="k">Técnico</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
       <div class="kv"><span class="k">Duração</span><span class="v">${fmtDur(o.checkin?.timestamp, o.checkout?.timestamp)}</span></div>
     </div>
     <div class="section-label">Descrição</div>
-    <div class="card" style="font-size:13.5px; line-height:1.5;">${o.descricao || '—'}</div>
+    <div class="card" style="font-size:13.5px; line-height:1.5;">${escapeHtml(o.descricao || '—')}</div>
     ${(o.fotos||[]).length ? `<div class="section-label">Evidências</div><div class="photo-grid">${o.fotos.map(f=>`<div class="thumb"><img src="${f.src}"><span class="photo-tag">${f.categoria}</span></div>`).join('')}</div>` : ''}
     <div class="section-label">Assinatura</div>
     <div class="sig-pad-wrap" style="padding:8px;"><img src="${o.assinatura}" style="width:100%; display:block;"></div>
@@ -442,7 +446,7 @@ function screenAdminPanel(){
 
   const f = state.params.filters || { tecnico:'all', status:'all', busca:'' };
   let list = [...OS_LIST];
-  if(f.tecnico!=='all') list = list.filter(o=>o.tecnicoId===f.tecnico);
+  if(f.tecnico!=='all') list = list.filter(o=>(o.tecnicoIds||[o.tecnicoId]).includes(f.tecnico));
   if(f.status!=='all') list = list.filter(o=>o.status===f.status);
   if(f.busca) list = list.filter(o=>o.cliente.nome.toLowerCase().includes(f.busca.toLowerCase()));
   list.sort((a,b)=> (b.data+b.hora).localeCompare(a.data+a.hora));
@@ -488,11 +492,11 @@ function screenAdminPanel(){
         <div class="time">${o.hora}</div>
         <div class="info" style="flex:1">
           <b>${escapeHtml(o.cliente.nome)}</b>
-          <div class="addr">${iconPin()} ${o.tecnicoNome} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
+          <div class="addr">${iconPin()} ${escapeHtml(o.tecnicoNome)} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
           <div class="meta" style="flex-wrap: wrap;">
             <span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span>
             ${o.status === 'CONCLUIDO' ? `<span class="chip" style="background:var(--surface-2); color:var(--text-muted);">Toque para ver relatório</span>` : ''}
-            <button class="btn btn-danger small" data-del-os="${o.id}" style="margin-left:auto; padding: 4px 10px; font-size: 11px;">Excluir</button>
+            ${o.status!=='CONCLUIDO'?`<button class="btn btn-danger small" data-del-os="${o.id}" style="margin-left:auto; padding: 4px 10px; font-size: 11px;">Excluir</button>`:''}
           </div>
         </div>
       </div>`).join('') : `<div class="empty">Nenhuma OS encontrada com esses filtros.</div>`}
@@ -516,14 +520,14 @@ function screenAdminDetail(){
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
       <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
       <div class="kv"><span class="k">E-mail do cliente</span><span class="v">${escapeHtml(o.cliente.email || '—')}</span></div>
-      <div class="kv"><span class="k">Técnico</span><span class="v">${o.tecnicoNome}</span></div>
+      <div class="kv"><span class="k">Técnico</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>
       <div class="kv"><span class="k">Tipo de serviço</span><span class="v">${osServiceLabel(o)}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
       <div class="kv"><span class="k">Duração</span><span class="v">${fmtDur(o.checkin?.timestamp, o.checkout?.timestamp)}</span></div>
     </div>
     <div class="section-label">Descrição</div>
-    <div class="card" style="font-size:13.5px; line-height:1.5;">${o.descricao || '—'}</div>
+    <div class="card" style="font-size:13.5px; line-height:1.5;">${escapeHtml(o.descricao || '—')}</div>
     ${(o.fotos||[]).length ? `<div class="section-label">Evidências</div><div class="photo-grid">${o.fotos.map(f=>`<div class="thumb"><img src="${f.src}"><span class="photo-tag">${f.categoria}</span></div>`).join('')}</div>` : ''}
     <div class="section-label">Assinatura</div>
     <div class="sig-pad-wrap" style="padding:8px;"><img src="${o.assinatura}" style="width:100%; display:block;"></div>
@@ -545,6 +549,7 @@ function screenAdminPending(){
         <div style="color:var(--text-muted); font-size:11.5px; margin-top:6px;">Solicitado em ${new Date(r.solicitadoEm).toLocaleString('pt-BR')}</div>
         <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
           <button class="btn btn-primary small" data-approve="${r.id}:TECNICO">Aprovar como Técnico</button>
+          <button class="btn btn-outline small" data-approve="${r.id}:VISUALIZADOR">Somente dashboard</button>
           <button class="btn btn-outline small" data-approve="${r.id}:ADMIN">Aprovar como Admin</button>
           <button class="btn btn-danger small" data-reject="${r.id}" style="margin-left:auto;">Recusar</button>
         </div>
@@ -580,8 +585,8 @@ function screenAdminNew(){
     <button class="btn btn-ghost" data-nav="admin_clientes">Abrir cadastro de clientes</button>
 
     <div class="section-label">Tipo de serviço</div><div class="field"><label>Serviço</label><select id="fTipoServico"><option value="INSTALACAO_REDE">🌐 Instalação de rede</option><option value="MANUTENCAO_WIFI">📡 Manutenção de Wi‑Fi</option><option value="INSTALACAO_CAMERAS">📷 Instalação de câmeras</option><option value="MANUTENCAO_PREVENTIVA">🔧 Manutenção preventiva</option><option value="SUPORTE">💻 Suporte técnico</option><option value="INSTALACAO_EQUIPAMENTOS">🖥️ Instalação de equipamentos</option><option value="INFRAESTRUTURA">🔌 Infraestrutura</option><option value="EMERGENCIAL">⚠️ Atendimento emergencial</option><option value="PERSONALIZADO">Outro — escrever tipo de serviço</option></select></div><div class="field" id="customServiceField" hidden><label for="customService">Tipo de serviço a prestar</label><input id="customService" type="text" maxlength="300" placeholder="Descreva o tipo de serviço"></div><div class="section-label">Agendamento</div>
-    <div class="field"><label>Técnico responsável</label>
-      <select id="fTecnico">${TECNICOS.map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}</select>
+    <div class="field"><label>Técnicos da equipe (selecione um ou mais)</label>
+      <div class="team-options">${TECNICOS.map(t=>`<label><input type="checkbox" name="fTecnicos" value="${escapeHtml(t.id)}"> ${escapeHtml(t.nome)}</label>`).join('')}</div>
     </div>
     <div style="display:flex; gap:10px;">
       <div class="field" style="flex:1"><label>Data</label><input type="date" id="fData" value="${localDate()}"></div>
@@ -596,7 +601,7 @@ function screenAdminNew(){
 function screenDashboard(){
   const f = state.params.filters || { tecnico:'all', status:'all', busca:'' };
   let list = [...OS_LIST];
-  if(f.tecnico!=='all') list = list.filter(o=>o.tecnicoId===f.tecnico);
+  if(f.tecnico!=='all') list = list.filter(o=>(o.tecnicoIds||[o.tecnicoId]).includes(f.tecnico));
   if(f.status!=='all') list = list.filter(o=>o.status===f.status);
   if(f.busca) list = list.filter(o=>o.cliente.nome.toLowerCase().includes(f.busca.toLowerCase()));
   list.sort((a,b)=> (b.data+b.hora).localeCompare(a.data+a.hora));
@@ -634,7 +639,7 @@ function screenDashboard(){
         <div class="time">${o.hora}</div>
         <div class="info" style="flex:1">
           <b>${escapeHtml(o.cliente.nome)}</b>
-          <div class="addr">${iconPin()} ${o.tecnicoNome} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
+          <div class="addr">${iconPin()} ${escapeHtml(o.tecnicoNome)} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
           <div class="meta"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
         </div>
       </div>`).join('') : `<div class="empty">Nenhuma OS encontrada.</div>`}
@@ -650,7 +655,7 @@ function screenViewDetail(){
     <div class="card">
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
       <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
-      <div class="kv"><span class="k">Técnico</span><span class="v">${o.tecnicoNome}</span></div>
+      <div class="kv"><span class="k">Técnico</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>
       <div class="kv"><span class="k">Status</span><span class="v">${statusLabel(o.status)}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
@@ -730,12 +735,14 @@ const VIEWS = {
 };
 
 function render(){
+  prepareFeatures();
   if (state.currentUser && state.view === 'login') state.view = rootScreenFor(state.role);
   document.getElementById('app').innerHTML = VIEWS[state.view]();
   const exitButton = document.getElementById('sessionLogout');
   exitButton.hidden = !state.currentUser;
   exitButton.onclick = logout;
   bindEvents();
+  bindFeatures();
 }
 
 /* ============================================================
@@ -919,7 +926,7 @@ function bindEvents(){
   const copyAddress=document.getElementById('copyAddress'); if(copyAddress) copyAddress.onclick=async()=>{ try{await navigator.clipboard.writeText(addr);toast('Endereço copiado');}catch(e){toast('Não foi possível copiar');} };
 
   const continueBtn = document.getElementById('continueBtn');
-  if(continueBtn) continueBtn.onclick = ()=>{ const o=findOS(state.params.id); nav(o.status==='EM_ANDAMENTO'?'tech_exec':'tech_report',{id:o.id}); };
+  if(continueBtn) continueBtn.onclick = ()=>{ const o=findOS(state.params.id); nav(o.status==='EM_ANDAMENTO'?(ownsReport(o)?'tech_exec':'team_progress'):'tech_report',{id:o.id}); };
 
   const checkinBtn = document.getElementById('checkinBtn');
   if(checkinBtn) checkinBtn.onclick = async () => {
@@ -1078,7 +1085,7 @@ function bindEvents(){
     try{
       const { os } = await apiCreateOS({
         clienteId, tipoServico, tipoServicoPersonalizado,
-        tecnicoId: document.getElementById('fTecnico').value,
+        tecnicoIds: [...document.querySelectorAll('[name=fTecnicos]:checked')].map(el=>el.value),
         data: document.getElementById('fData').value,
         hora: document.getElementById('fHora').value,
       });
@@ -1164,7 +1171,7 @@ function handlePhoto(e, osId, category="EVIDENCIA"){
 
       const dataUrl = canvas.toDataURL('image/jpeg', .85);
       try{
-        const { fotos } = await apiUploadFoto(osId, category, dataUrl);
+        const { fotos } = reportDraft ? {fotos:[...(o.fotos||[]),{id:crypto.randomUUID(),categoria:category,src:dataUrl}]} : await apiUploadFoto(osId, category, dataUrl);
         o.fotos = fotos; // servidor devolve a lista completa e atualizada de fotos da OS
         render();
       }catch(err){
@@ -1208,7 +1215,9 @@ function setupSignaturePad(canvas, osId){
     try{
       const o = findOS(osId);
       const assinaturaDataUrl = canvas.toDataURL('image/png');
-      const { os } = await apiCheckout(osId, { descricao: o.descricao || '', camposServico: o.camposServico || {}, assinatura: assinaturaDataUrl });
+      const body = { descricao: o.descricao || '', camposServico: o.camposServico || {}, assinatura: assinaturaDataUrl };
+      const { os } = reportDraft ? await api('/os/'+encodeURIComponent(osId)+'/report', {method:'PATCH', body:{...body,fotos:o.fotos.map(f=>(OS_LIST.find(item=>item.id===osId)?.fotos||[]).some(saved=>saved.id===f.id&&saved.src===f.src)?{id:f.id,categoria:f.categoria}:{categoria:f.categoria,src:f.src})}}) : await apiCheckout(osId, body);
+      reportDraft = null;
       updateOsCache(os);
       toast('Atendimento concluído');
       nav('tech_report', { id: osId });

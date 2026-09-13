@@ -26,11 +26,16 @@
  */
 
 /** Bloqueia a rota se não houver ninguém logado nesta sessão. */
-function requireAuth(req, res, next) {
-  if (!req.session || !req.session.userId) {
-    return res.status(401).json({ erro: 'Não autenticado. Faça login novamente.' });
-  }
-  next();
+async function requireAuth(req, res, next) {
+  try {
+    const { readCollection } = require('../db');
+    const user = req.session?.userId && (await readCollection('usuarios')).find(u => u.id === req.session.userId);
+    if (!user || (req.session.sessionVersion || 0) !== (user.sessionVersion || 0)) {
+      req.session = null; return res.status(401).json({ erro: 'Não autenticado. Faça login novamente.' });
+    }
+    req.session.perfil = user.perfil; req.session.tecnicoId = user.tecnicoId || null;
+    next();
+  } catch (err) { next(err); }
 }
 
 /**
@@ -58,7 +63,7 @@ function requireOwnOsOrElevated(getOsById) {
     if (req.session.perfil !== 'TECNICO') return next();
     const os = await getOsById(req.params.id);
     if (!os) return res.status(404).json({ erro: 'Ordem de serviço não encontrada.' });
-    if (os.tecnicoId !== req.session.tecnicoId) {
+    if (!(os.tecnicoIds || [os.tecnicoId]).includes(req.session.tecnicoId)) {
       return res.status(403).json({ erro: 'Esta ordem de serviço não pertence a você.' });
     }
     next();
