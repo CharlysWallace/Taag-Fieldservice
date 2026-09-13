@@ -25,7 +25,7 @@
  */
 
 const express = require('express');
-const { readCollection, writeCollection, genId } = require('../db');
+const { readCollection, writeCollection, mutateCollection, genId } = require('../db');
 const { hashPassword, comparePassword } = require('../auth/hash');
 const { requireAuth, requireRole } = require('../auth/middleware');
 
@@ -33,7 +33,7 @@ const router = express.Router();
 
 /** Monta o objeto de usuário "seguro" para devolver ao frontend — nunca inclui o hash da senha. */
 function toPublicUser(u) {
-  const { senhaHash, ...resto } = u;
+  const { senhaHash, passwordResets, sessionVersion, ...resto } = u;
   return resto;
 }
 
@@ -57,6 +57,7 @@ router.post('/login', async (req, res) => {
   req.session.userId = user.id;
   req.session.perfil = user.perfil;
   req.session.tecnicoId = user.tecnicoId || null;
+  req.session.sessionVersion = user.sessionVersion || 0;
 
   res.json({ usuario: toPublicUser(user) });
 });
@@ -112,16 +113,14 @@ router.post('/register', async (req, res) => {
   await writeCollection('solicitacoes_cadastro', pendentes);
 
   // avisa o(s) administrador(es): notificação com paraAdmin:true (ver notifications.routes.js)
-  const notificacoes = await readCollection('notificacoes');
-  notificacoes.push({
+  await mutateCollection('notificacoes', notificacoes=>notificacoes.push({
     id: genId('notif'),
     tecnicoId: null,
     paraAdmin: true,
     mensagem: `Nova solicitação de cadastro: ${nome} (${email})`,
     criadoEm: new Date().toISOString(),
     lida: false,
-  });
-  await writeCollection('notificacoes', notificacoes);
+  }));
 
   res.status(201).json({ ok: true, mensagem: 'Cadastro enviado! Aguarde a aprovação do administrador.' });
 });
@@ -154,8 +153,7 @@ router.post('/pending/:id/approve', requireAuth, requireRole('ADMIN'), async (re
     await writeCollection('tecnicos', tecnicos);
   }
 
-  const usuarios = await readCollection('usuarios');
-  usuarios.push({
+  await mutateCollection('usuarios', usuarios => usuarios.push({
     id: genId('u'),
     nome: solicitacao.nome,
     email: solicitacao.email,
@@ -163,8 +161,7 @@ router.post('/pending/:id/approve', requireAuth, requireRole('ADMIN'), async (re
     perfil,
     tecnicoId,
     principal: false,
-  });
-  await writeCollection('usuarios', usuarios);
+  }));
 
   solicitacao.status = 'APROVADO';
   await writeCollection('solicitacoes_cadastro', pendentes);

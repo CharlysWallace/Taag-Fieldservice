@@ -23,7 +23,7 @@
  */
 
 const express = require('express');
-const { readCollection, writeCollection } = require('../db');
+const { readCollection, mutateCollection } = require('../db');
 const { requireAuth } = require('../auth/middleware');
 
 const router = express.Router();
@@ -45,12 +45,10 @@ router.get('/', requireAuth, async (req, res) => {
 
 // ---------- POST /api/notificacoes/marcar-lidas ----------
 router.post('/marcar-lidas', requireAuth, async (req, res) => {
-  const todas = await readCollection('notificacoes');
   const idsQueSaoMinhas = new Set((await minhasNotificacoes(req)).map((n) => n.id));
-  todas.forEach((n) => {
+  await mutateCollection('notificacoes', todas => todas.forEach((n) => {
     if (idsQueSaoMinhas.has(n.id)) n.lida = true;
-  });
-  await writeCollection('notificacoes', todas);
+  }));
   res.json({ ok: true });
 });
 

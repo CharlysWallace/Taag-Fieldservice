@@ -21,3 +21,6 @@ jobs:
       - run: node --check src/routes/os.routes.js
       - run: node --check src/routes/notifications.routes.js
       - run: node --check src/routes/tecnicos.routes.js
+      - run: node --check public/app.js
+      - run: node --check public/features.js
+      - run: node --test test/workflows.test.js

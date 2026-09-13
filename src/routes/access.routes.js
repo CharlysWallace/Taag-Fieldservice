@@ -1,8 +1,8 @@
 const express = require('express');
 const { readCollection, writeCollection, genId } = require('../db');
-const { requireAuth } = require('../auth/middleware');
+const { requireAuth, requireRole } = require('../auth/middleware');
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, requireRole('ADMIN','TECNICO'));
 const collection = req => `acessos_${req.session.userId}`;
 router.get('/', async (req, res, next) => {
   try { res.json({ acessos: await readCollection(collection(req)) }); } catch (err) { next(err); }
