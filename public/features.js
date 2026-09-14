@@ -70,7 +70,7 @@ function monthlyPDF() {
   // Linhas excepcionalmente longas continuam na próxima página, sem cortar texto.
   while(remaining>0){let capacity=Math.floor((bottom-y-padding*2)/leading);if(capacity<1){nextPage();capacity=Math.floor((bottom-y-padding*2)/leading);}const count=Math.min(capacity,remaining);draw(lines.map(c=>c.splice(0,count)),count,false,index%2===1);remaining-=count;if(remaining>0)nextPage();}
  });
- if(!rows.length)textLine('Nenhum chamado neste período.');
+ if(!rows.length){y+=8;textLine('Nenhum chamado neste período.');}
  const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(8);doc.text(`${p}/${pages}`,274,204);}doc.save(`TAAG-${dashboardFilters.month}.pdf`);
 }
 
