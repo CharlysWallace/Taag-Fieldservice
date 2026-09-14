@@ -124,7 +124,7 @@ function back() {
 async function logout() {
   closeHelp();
   try { await apiLogout(); } catch (e) { toast('Não foi possível sair. Verifique a conexão e tente novamente.'); return; }
-  dashboardData = null; reportDraft = null;
+  dashboardData = null; reportDraft = null; photoDescriptionDrafts.clear();
   state.role = null; state.currentUser = null; state.currentTech = null; state.history = [];
   CLIENTES = []; ACCESS_CACHE = []; OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
   Object.assign(agendaFilters, { cliente: '', inicio: '', fim: '', status: '' });
@@ -162,7 +162,6 @@ function toast(msg){
 }
 function openRoute(endereco){ window.open('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(endereco), '_blank', 'noopener,noreferrer'); }
 function openUber(endereco){ window.open('https://m.uber.com/ul/?action=setPickup&dropoff[formatted_address]=' + encodeURIComponent(endereco), '_blank', 'noopener,noreferrer'); }
-function open99(endereco){ window.open('https://99app.com/', '_blank', 'noopener,noreferrer'); toast('Abrindo a 99. Informe o endereço como destino.'); }
 
 function iconPin(){ return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 22s7-7.58 7-13A7 7 0 0 0 5 9c0 5.42 7 13 7 13Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="2.3" stroke="currentColor" stroke-width="1.8"/></svg>'; }
 function iconBack(){ return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
@@ -326,7 +325,7 @@ function screenTechDetail(){
     </div>
 
     <button class="btn btn-outline" id="routeBtn">📍 Como chegar?</button>
-    <div class="nav-modal" id="navModal" style="display:none"><div class="nav-modal-card"><button class="modal-close" id="closeNavModal">✕</button><h3>📍 ${escapeHtml(o.cliente.nome)}</h3><p>${escapeHtml(o.cliente.endereco)}</p><div class="nav-option" id="mapsOption">🗺️ <span><b>Google Maps</b><small>Abrir rota e navegação</small></span></div><div class="nav-option" id="uberOption">🚗 <span><b>Uber</b><small>Solicitar uma viagem até o cliente</small></span></div><div class="nav-option" id="n99Option">🚕 <span><b>99</b><small>Solicitar corrida</small></span></div><div class="nav-option" id="copyAddress">📋 <span><b>Copiar endereço</b><small>Utilizar em qualquer aplicativo</small></span></div></div></div>
+    <div class="nav-modal" id="navModal" style="display:none"><div class="nav-modal-card"><button class="modal-close" id="closeNavModal">✕</button><h3>📍 ${escapeHtml(o.cliente.nome)}</h3><p>${escapeHtml(o.cliente.endereco)}</p><div class="nav-option" id="mapsOption">🗺️ <span><b>Google Maps</b><small>Abrir rota e navegação</small></span></div><div class="nav-option" id="uberOption">🚗 <span><b>Uber</b><small>Solicitar uma viagem até o cliente</small></span></div><div class="nav-option" id="copyAddress">📋 <span><b>Copiar endereço</b><small>Utilizar em qualquer aplicativo</small></span></div></div></div>
 
     ${already ? `
       <div class="section-label">Check-in Realizado</div>
@@ -386,9 +385,7 @@ function screenTechExec(){
 
     ${reportFields(o)}
     <div class="section-label">Evidências do serviço</div><div class="photo-category"><label>Categoria da foto</label><select id="photoCategory"><option value="ANTES">📷 Antes do serviço</option><option value="DURANTE">📷 Durante o serviço</option><option value="DEPOIS">📷 Após a conclusão</option><option value="EQUIPAMENTOS">📷 Equipamentos utilizados</option></select></div><label class="photo-add">📷 Toque para anexar foto (câmera ou galeria)<input type="file" accept="image/*" id="photoInput" style="display:none;"></label>
-    <div class="photo-grid" id="photoGrid">
-      ${(o.fotos||[]).map((f,i)=>`<div class="thumb"><img src="${f.src}"><span class="photo-tag">${f.categoria}</span></div>`).join('')}
-    </div>
+    ${photoGallery(o,true)}
 
     <button class="btn btn-primary" style="margin-top:22px;" id="toSignBtn">Finalizar e coletar assinatura</button>
   </div>`;
@@ -427,7 +424,7 @@ function screenTechReport(){
     </div>
     <div class="section-label">Descrição</div>
     <div class="card" style="font-size:13.5px; line-height:1.5;">${escapeHtml(o.descricao || '—')}</div>
-    ${(o.fotos||[]).length ? `<div class="section-label">Evidências</div><div class="photo-grid">${o.fotos.map(f=>`<div class="thumb"><img src="${f.src}"><span class="photo-tag">${f.categoria}</span></div>`).join('')}</div>` : ''}
+    ${photoGallery(o)}
     <div class="section-label">Assinatura</div>
     <div class="sig-pad-wrap" style="padding:8px;"><img src="${o.assinatura}" style="width:100%; display:block;"></div>
 
@@ -459,7 +456,7 @@ function screenAdminPanel(){
 
     ${pendentesAprovacao ? `
       <div class="pending-alert" data-nav="admin_pending">
-        <span>🔔 ${pendentesAprovacao} solicitação${pendentesAprovacao>1?'ões':''} de cadastro aguardando aprovação</span>
+        <span>🔔 ${pendentesAprovacao} ${pendentesAprovacao===1?'solicitação':'solicitações'} de cadastro aguardando aprovação</span>
         <span class="chip pendente">Revisar</span>
       </div>
     ` : ''}
@@ -528,7 +525,7 @@ function screenAdminDetail(){
     </div>
     <div class="section-label">Descrição</div>
     <div class="card" style="font-size:13.5px; line-height:1.5;">${escapeHtml(o.descricao || '—')}</div>
-    ${(o.fotos||[]).length ? `<div class="section-label">Evidências</div><div class="photo-grid">${o.fotos.map(f=>`<div class="thumb"><img src="${f.src}"><span class="photo-tag">${f.categoria}</span></div>`).join('')}</div>` : ''}
+    ${photoGallery(o)}
     <div class="section-label">Assinatura</div>
     <div class="sig-pad-wrap" style="padding:8px;"><img src="${o.assinatura}" style="width:100%; display:block;"></div>
 
@@ -719,7 +716,7 @@ function screenSettings(){
 
     ${aba==='aprovacao' && isAdmin ? `
       <div class="card">
-        <div style="font-size:13.5px;">${PENDING_CACHE.length} solicitação${PENDING_CACHE.length===1?'':'ões'} de cadastro aguardando aprovação.</div>
+        <div style="font-size:13.5px;">${PENDING_CACHE.length} ${PENDING_CACHE.length===1?'solicitação':'solicitações'} de cadastro aguardando aprovação.</div>
         <button class="btn btn-primary" style="margin-top:14px;" data-nav="admin_pending">Abrir aprovações</button>
       </div>
     ` : ''}
@@ -922,7 +919,6 @@ function bindEvents(){
   const currentOS=findOS(state.params.id); const addr=currentOS?.cliente?.endereco;
   const mapsOption=document.getElementById('mapsOption'); if(mapsOption) mapsOption.onclick=()=>openRoute(addr);
   const uberOption=document.getElementById('uberOption'); if(uberOption) uberOption.onclick=()=>openUber(addr);
-  const n99Option=document.getElementById('n99Option'); if(n99Option) n99Option.onclick=()=>open99(addr);
   const copyAddress=document.getElementById('copyAddress'); if(copyAddress) copyAddress.onclick=async()=>{ try{await navigator.clipboard.writeText(addr);toast('Endereço copiado');}catch(e){toast('Não foi possível copiar');} };
 
   const continueBtn = document.getElementById('continueBtn');
@@ -951,14 +947,16 @@ function bindEvents(){
 
     document.getElementById('photoInput').onchange = e => handlePhoto(e, state.params.id, document.getElementById('photoCategory').value);
 
-    document.getElementById('toSignBtn').onclick = ()=>{
+    document.getElementById('toSignBtn').onclick = async ()=>{
       const o=findOS(state.params.id);
       const cats=(o.fotos||[]).map(f=>f.categoria);
       if(!cats.includes('ANTES')||!cats.includes('DEPOIS')){
         toast('Registre pelo menos uma foto ANTES e uma DEPOIS do serviço');
         return;
       }
-      nav('tech_signature', { id: state.params.id });
+      const button=document.getElementById('toSignBtn');button.disabled=true;
+      try { await saveAllPhotoDescriptions(o); nav('tech_signature', { id: state.params.id }); }
+      catch(err){toast(err.message);}finally{button.disabled=false;}
     };
   }
 
@@ -1216,7 +1214,7 @@ function setupSignaturePad(canvas, osId){
       const o = findOS(osId);
       const assinaturaDataUrl = canvas.toDataURL('image/png');
       const body = { descricao: o.descricao || '', camposServico: o.camposServico || {}, assinatura: assinaturaDataUrl };
-      const { os } = reportDraft ? await api('/os/'+encodeURIComponent(osId)+'/report', {method:'PATCH', body:{...body,fotos:o.fotos.map(f=>(OS_LIST.find(item=>item.id===osId)?.fotos||[]).some(saved=>saved.id===f.id&&saved.src===f.src)?{id:f.id,categoria:f.categoria}:{categoria:f.categoria,src:f.src})}}) : await apiCheckout(osId, body);
+      const { os } = reportDraft ? await api('/os/'+encodeURIComponent(osId)+'/report', {method:'PATCH', body:{...body,fotos:o.fotos.map(f=>(OS_LIST.find(item=>item.id===osId)?.fotos||[]).some(saved=>saved.id===f.id&&saved.src===f.src)?{id:f.id,categoria:f.categoria,descricao:f.descricao||''}:{categoria:f.categoria,src:f.src,descricao:f.descricao||''})}}) : await apiCheckout(osId, body);
       reportDraft = null;
       updateOsCache(os);
       toast('Atendimento concluído');
