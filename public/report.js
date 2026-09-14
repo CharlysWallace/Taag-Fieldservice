@@ -56,6 +56,8 @@ function buildTaagReport(jsPDF, o, logo) {
   (o.fotos || []).forEach((photo, index) => {
     nextPage();
     section('EVIDÊNCIAS FOTOGRÁFICAS', `Foto ${index + 1} de ${o.fotos.length} - ${categories[photo.categoria] || 'Registro do atendimento'}`);
+    if(photo.descricao) section('DESCRIÇÃO DA FOTO', photo.descricao);
+    if(bottom-y<40) nextPage();
     try {
       const properties = doc.getImageProperties(photo.src);
       const scale = Math.min(width / properties.width, (bottom - y - 5) / properties.height);

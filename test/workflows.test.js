@@ -29,17 +29,27 @@ test('equipes, edição única, acesso gerencial, recuperação e chat autentica
   assert.equal((await req(t.other,base+'/fotos','POST',{categoria:'ANTES',dataUrl:image})).status,403);
   assert.equal((await req(t.owner,base+'/checkout','POST',report)).status,400);
   for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req(t.owner,base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
+  const photoId=(await req(t.owner,base)).data.os.fotos[0].id;
+  const captionRoute=base+'/fotos/'+photoId;
+  assert.equal((await req(t.other,captionRoute,'PATCH',{descricao:'Sem permissão'})).status,403);
+  assert.equal((await req('admin',captionRoute,'PATCH',{descricao:'Sem permissão'})).status,403);
+  assert.equal((await req(t.owner,captionRoute,'PATCH',{descricao:'a'.repeat(1001)})).status,400);
+  assert.equal((await req(t.owner,captionRoute,'PATCH',{descricao:'a'.repeat(1000)})).status,200);
+  assert.equal((await req(t.owner,base)).data.os.fotos[0].descricao.length,1000);
   assert.equal((await req(t.other,base+'/checkout','POST',report)).status,403);
   assert.equal((await req(t.owner,base+'/checkout','POST',report)).status,200);
+  assert.equal((await req(t.owner,captionRoute,'PATCH',{descricao:'Não pode após conclusão'})).status,409);
   assert.equal((await req('admin',base+'/report','PATCH',report)).status,403);
   assert.equal((await req(t.other,base+'/report','PATCH',report)).status,403);
   const photos=(await req(t.owner,base)).data.os.fotos.map(f=>({id:f.id,categoria:f.categoria}));
   assert.equal((await req(t.owner,base+'/report','PATCH',{...report,fotos:[{id:'invalid',categoria:'ANTES'},{id:'invalid',categoria:'DEPOIS'}]})).status,400);
-  report.fotos=photos;
+  assert.equal((await req(t.owner,base+'/report','PATCH',{...report,fotos:photos.map(f=>({...f,descricao:'a'.repeat(1001)}))})).status,400);
+  report.fotos=photos.map(f=>({...f,descricao:'Descrição revisada'}));
   const edits=await Promise.all([req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão A'}),req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão B'})]);assert.deepEqual(edits.map(r=>r.status).sort(),[200,409]);
   assert.equal((await req(t.owner,base+'/fotos','POST',{categoria:'ANTES',dataUrl:image})).status,409);
   assert.equal((await req('admin',base,'DELETE')).status,403);
   assert.equal((await req(t.owner,base)).data.os.edicoesRelatorio,1);
+  assert.equal((await req(t.owner,base)).data.os.fotos[0].descricao,'Descrição revisada');
  });
  await t.test('perfil gerencial recebe só dados do dashboard',async()=>{
   for(const route of ['/os','/os/'+t.osId,'/acessos','/clientes'])assert.equal((await req('viewer',route)).status,403);

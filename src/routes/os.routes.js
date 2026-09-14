@@ -6,6 +6,7 @@ const team = o => o.tecnicoIds || [o.tecnicoId];
 const fail = (status,message) => { const err = new Error(message); err.status=status; throw err; };
 const categories = ['ANTES','DURANTE','DEPOIS','EQUIPAMENTOS','EVIDENCIA'];
 function imageOK(value) { return typeof value === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=\r\n]+$/.test(value) && value.length <= 7000000; }
+function validPhotoDescription(value) { return value===undefined || (typeof value==='string' && value.length<=1000); }
 function reportBody(body) {
   if (typeof body.descricao !== 'string' || body.descricao.length > 30000) fail(400,'Descrição inválida (até 30.000 caracteres).');
   if (!body.camposServico || typeof body.camposServico !== 'object' || Array.isArray(body.camposServico) || Object.keys(body.camposServico).length > 30 || Object.values(body.camposServico).some(v=>typeof v !== 'string' || v.length > 4000)) fail(400,'Campos do relatório inválidos.');
@@ -55,14 +56,24 @@ router.post('/:id/checkout',requireRole('TECNICO'),wrap(async(req,res)=>{
 }));
 router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
   reportBody(req.body || {});let os;
-  if(req.body.fotos!==undefined && (!Array.isArray(req.body.fotos) || req.body.fotos.some(f=>!f || !categories.includes(f.categoria) || (f.src!==undefined ? !imageOK(f.src) : typeof f.id!=='string'))))fail(400,'Fotos inválidas.');
+  if(req.body.fotos!==undefined && (!Array.isArray(req.body.fotos) || req.body.fotos.some(f=>!f || !categories.includes(f.categoria) || !validPhotoDescription(f.descricao) || (f.src!==undefined ? !imageOK(f.src) : typeof f.id!=='string'))))fail(400,'Fotos inválidas.');
   await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='CONCLUIDO' || (os.edicoesRelatorio || 0)>=1)fail(409,'A única edição deste relatório já foi utilizada ou ele ainda não foi concluído.');
-    if(req.body.fotos){const cats=req.body.fotos.map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Mantenha ao menos uma foto antes e uma depois.');os.fotos=req.body.fotos.map(f=>{if(f.src===undefined){const saved=(os.fotos||[]).find(photo=>photo.id===f.id);if(!saved)fail(400,'Foto original não encontrada.');return {...saved,categoria:f.categoria};}return {id:genId('foto'),categoria:f.categoria,src:f.src,criadoEm:new Date().toISOString()};});}
+    if(req.body.fotos){const cats=req.body.fotos.map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Mantenha ao menos uma foto antes e uma depois.');os.fotos=req.body.fotos.map(f=>{if(f.src===undefined){const saved=(os.fotos||[]).find(photo=>photo.id===f.id);if(!saved)fail(400,'Foto original não encontrada.');return {...saved,categoria:f.categoria,descricao:f.descricao ?? saved.descricao ?? ''};}return {id:genId('foto'),categoria:f.categoria,src:f.src,descricao:f.descricao || '',criadoEm:new Date().toISOString()};});}
     os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura;os.edicoesRelatorio=1;os.editadoEm=new Date().toISOString();os.editadoPor=req.session.userId;
   });res.json({os:await related(os)});
 }));
 router.post('/:id/fotos',requireRole('TECNICO'),wrap(async(req,res)=>{
   const {categoria,dataUrl}=req.body || {};if(!categories.includes(categoria) || !imageOK(dataUrl))fail(400,'Envie uma imagem válida de até aproximadamente 5 MB.');let fotos;
-  await mutateCollection('ordens_servico',items=>{const os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Fotos só podem ser anexadas durante o atendimento; para relatório concluído use a edição única.');os.fotos ||= [];os.fotos.push({id:genId('foto'),categoria,src:dataUrl,criadoEm:new Date().toISOString()});fotos=os.fotos;});res.status(201).json({fotos});
+  await mutateCollection('ordens_servico',items=>{const os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Fotos só podem ser anexadas durante o atendimento; para relatório concluído use a edição única.');os.fotos ||= [];os.fotos.push({id:genId('foto'),categoria,src:dataUrl,descricao:'',criadoEm:new Date().toISOString()});fotos=os.fotos;});res.status(201).json({fotos});
+}));
+router.patch('/:id/fotos/:fotoId',requireRole('TECNICO'),wrap(async(req,res)=>{
+  const descricao=req.body?.descricao;
+  if(typeof descricao!=='string' || !validPhotoDescription(descricao))fail(400,'A descrição da foto deve ter no máximo 1000 caracteres.');
+  let foto;
+  await mutateCollection('ordens_servico',items=>{
+    const os=find(items,req.params.id);responsible(os,req);
+    if(os.status!=='EM_ANDAMENTO')fail(409,'Para alterar fotos de um relatório concluído, use a edição única do relatório.');
+    foto=(os.fotos||[]).find(f=>f.id===req.params.fotoId);if(!foto)fail(404,'Foto não encontrada.');foto.descricao=descricao;
+  });res.json({foto});
 }));
 module.exports = router;

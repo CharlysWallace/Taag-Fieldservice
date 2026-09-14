@@ -75,6 +75,7 @@ function monthlyPDF() {
 }
 
 function bindFeatures() {
+ bindPhotoDescriptions();
  document.getElementById('sessionActions').hidden=!state.currentUser;
  const app=document.getElementById('app');const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
  let help=document.getElementById('sessionHelp');if(!help){help=document.createElement('button');help.id='sessionHelp';help.className='session-logout';help.textContent='Ajuda · Taagzinho';document.getElementById('sessionLogout').before(help);}help.hidden=!state.currentUser;help.onclick=openHelp;
@@ -130,3 +131,34 @@ function openHelp(){
  };
 }
 window.addEventListener('pagehide',closeHelp);
+
+// Rascunhos preservados ao anexar outra foto; salvos antes de coletar a assinatura.
+const photoDescriptionDrafts=new Map();
+function photoDescriptionKey(osId,photoId){return osId+':'+photoId;}
+function photoGallery(o,editable=false){
+ if(!(o.fotos||[]).length)return '';
+ return `<div class="section-label">Fotos do atendimento</div><div class="photo-evidence-list">${o.fotos.map((f,i)=>{
+  const description=editable&&!reportDraft?(photoDescriptionDrafts.get(photoDescriptionKey(o.id,f.id))??f.descricao??''):(f.descricao||'');
+  return `<article class="photo-evidence"><img src="${escapeHtml(f.src)}" alt="Foto ${i+1} do atendimento"><p class="photo-category-label">Foto ${i+1} · ${escapeHtml(f.categoria)}</p>${editable?`<div class="photo-description-box"><label for="photo-description-${i}">Descrição da foto (opcional)</label><textarea id="photo-description-${i}" data-photo-description="${escapeHtml(f.id)}" maxlength="1000" placeholder="Descreva o que aparece nesta foto…">${escapeHtml(description)}</textarea><small data-photo-count="${escapeHtml(f.id)}">${description.length}/1000 caracteres</small>${reportDraft?'<small>A descrição será salva junto com a edição do relatório.</small>':`<button type="button" class="btn btn-outline" data-save-photo-description="${escapeHtml(f.id)}">Salvar descrição</button>`}</div>`:description?`<div class="photo-description-box"><b>Descrição da foto</b><p>${escapeHtml(description)}</p></div>`:''}</article>`;
+ }).join('')}</div>`;
+}
+async function savePhotoDescription(o,id){
+ const key=photoDescriptionKey(o.id,id);if(!photoDescriptionDrafts.has(key))return;
+ const descricao=photoDescriptionDrafts.get(key);
+ const data=await api('/os/'+encodeURIComponent(o.id)+'/fotos/'+encodeURIComponent(id),{method:'PATCH',body:{descricao}});
+ const photo=o.fotos.find(f=>f.id===id);if(photo)photo.descricao=data.foto.descricao;
+ if(photoDescriptionDrafts.get(key)===descricao)photoDescriptionDrafts.delete(key);
+}
+async function saveAllPhotoDescriptions(o){if(reportDraft)return;for(const f of o.fotos||[])await savePhotoDescription(o,f.id);}
+function bindPhotoDescriptions(){
+ document.querySelectorAll('[data-photo-description]').forEach(input=>{
+  input.oninput=()=>{const o=findOS(state.params.id),id=input.dataset.photoDescription;
+   if(reportDraft)o.fotos.find(f=>f.id===id).descricao=input.value;
+   else photoDescriptionDrafts.set(photoDescriptionKey(o.id,id),input.value);
+   const count=[...document.querySelectorAll('[data-photo-count]')].find(el=>el.dataset.photoCount===id);if(count)count.textContent=input.value.length+'/1000 caracteres';
+  };
+ });
+ document.querySelectorAll('[data-save-photo-description]').forEach(button=>button.onclick=async()=>{
+  button.disabled=true;try{await savePhotoDescription(findOS(state.params.id),button.dataset.savePhotoDescription);toast('Descrição da foto salva.');}catch(e){toast(e.message);}finally{button.disabled=false;}
+ });
+}
