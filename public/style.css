@@ -389,12 +389,26 @@ input[type=range]{ width:100%; margin-top:18px; accent-color:var(--accent); }
 /* Equipes, ações persistentes e ajuda autenticada */
 [hidden]{display:none!important}
 .team-options{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.team-options label{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #aa783f;border-radius:10px}.team-options input{width:auto}
-#fixedNewOS{position:absolute;bottom:125px;right:20px;z-index:20}
-#app .screen{padding-bottom:90px}
+
+#app .screen{padding-bottom:24px}
 #sessionHelp{margin-top:0;padding:9px;color:#f4bd73}
 #helpDialog{box-sizing:border-box;width:min(95vw,460px);max-height:90dvh;border:1px solid #c58c47;border-radius:18px;background:#151b24;color:#fff;padding:20px;overflow:auto}
 #helpDialog::backdrop{background:#000b}#helpDialog header{display:flex;align-items:center;gap:12px}#helpDialog header img{width:65px;height:65px;border-radius:16px}#helpDialog h2{margin:0}#helpDialog header p{margin:4px 0;color:#f4bd73}.help-notice{font-size:12px;line-height:1.5;color:#c4cbd5}#helpMessages{height:30dvh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:10px;background:#0b1018;border-radius:12px;margin-bottom:12px}#helpMessages p{line-height:1.5}#helpInput{width:100%;box-sizing:border-box;min-height:70px;margin:7px 0}#helpClose{margin-top:10px}
 
 #sessionHelp{border-color:#ac783c;background:#2a2117;color:#ffd595}
 
-#fixedNewOS{font-size:28px;line-height:1;font-weight:700}
+
+
+/* O rodapé reserva espaço próprio; nenhuma ação cobre o conteúdo rolável. */
+.session-actions{
+  flex:0 0 auto; display:flex; flex-direction:column; gap:14px;
+  padding:14px 16px max(14px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--border); background:var(--bg);
+}
+.session-secondary{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.session-actions .session-logout{width:100%;margin:0;min-height:48px;padding:12px 10px;line-height:1.4;}
+#fixedNewOS{position:static;width:100%;height:auto;min-height:50px;border-radius:12px;gap:12px;padding:10px 16px;font:700 15px 'Inter',sans-serif;box-shadow:none;}
+#fixedNewOS span{font-size:28px;line-height:1;}
+.settings-actions{display:grid;gap:14px;margin-bottom:24px;}
+#app .screen > .btn + .btn{margin-top:14px;}
+#app .settings-actions .btn{margin:0;min-height:48px;}

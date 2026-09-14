@@ -50,12 +50,13 @@ function monthlyPDF() {
  const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(8);doc.text(`${p}/${pages}`,185,290);}doc.save(`TAAG-${dashboardFilters.month}.pdf`);
 }
 function bindFeatures() {
+ document.getElementById('sessionActions').hidden=!state.currentUser;
  const app=document.getElementById('app');const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
  let help=document.getElementById('sessionHelp');if(!help){help=document.createElement('button');help.id='sessionHelp';help.className='session-logout';help.textContent='Ajuda · Taagzinho';document.getElementById('sessionLogout').before(help);}help.hidden=!state.currentUser;help.onclick=openHelp;
- let fab=document.getElementById('fixedNewOS');if(!fab){fab=document.createElement('button');fab.id='fixedNewOS';fab.className='fab';fab.textContent='+';fab.setAttribute('aria-label','Criar nova OS');document.getElementById('phoneFrame').append(fab);}fab.hidden=state.role!=='ADMIN'||state.view==='admin_new';fab.onclick=()=>nav('admin_new');
+ let fab=document.getElementById('fixedNewOS');if(!fab){fab=document.createElement('button');fab.id='fixedNewOS';fab.className='fab';fab.innerHTML='<span aria-hidden="true">+</span> Nova agenda / OS';fab.setAttribute('aria-label','Criar nova OS');document.getElementById('sessionActions').prepend(fab);}fab.hidden=state.role!=='ADMIN'||state.view==='admin_new';fab.onclick=()=>nav('admin_new');
  document.getElementById('newOsBtn')?.remove();
  if(state.view==='settings'){
-  const screen=app.querySelector('.screen');screen.insertAdjacentHTML('afterbegin',`<button class="btn btn-outline" id="settingsHelp">Ajuda · Taagzinho</button>${state.role==='ADMIN'?'<button class="btn btn-primary" data-nav="admin_new">Criar nova OS</button><button class="btn btn-outline" id="settingsDashboard">Dashboard mensal</button><button class="btn btn-outline" data-nav="reset_admin">Redefinições de senha</button>':''}`);
+  const screen=app.querySelector('.screen');screen.insertAdjacentHTML('afterbegin',`<div class="settings-actions"><button class="btn btn-outline" id="settingsHelp">Ajuda · Taagzinho</button>${state.role==='ADMIN'?'<button class="btn btn-primary" data-nav="admin_new">Criar nova OS</button><button class="btn btn-outline" id="settingsDashboard">Dashboard mensal</button><button class="btn btn-outline" data-nav="reset_admin">Redefinições de senha</button>':''}</div>`);
   on('settingsHelp',openHelp);on('settingsDashboard',openDashboard);
   screen.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>nav(el.dataset.nav));
   if(state.role==='VISUALIZADOR'){app.querySelectorAll('[data-set-aba]').forEach(el=>{if(el.dataset.setAba!=='perfil')el.remove();});}
