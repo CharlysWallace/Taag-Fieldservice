@@ -31,9 +31,11 @@ function screenMonthlyDashboard() {
  <button class="btn btn-outline" id="refreshDashboard">Aplicar filtros / Atualizar</button><p id="dashboardError" role="alert"></p>
  <div class="card"><h2>${rows.length} chamados</h2><p>${rows.filter(o=>o.status==='CONCLUIDO').length} concluídos · ${new Set(rows.map(o=>o.cliente.nome)).size} clientes</p><p>Tempo registrado: ${rows.reduce((n,o)=>n+(o.minutos||0),0)} minutos</p></div><p>Contagem por OS. Equipe indica atribuição; responsável indica quem registrou o atendimento.</p>
  <button class="btn btn-primary" id="monthlyPdf">Baixar PDF mensal</button><button class="btn btn-outline" id="monthlyCsv">Exportar CSV</button>
- ${rows.map(o=>`<div class="card"><h3>${escapeHtml(o.cliente.nome)}</h3><p>${escapeHtml(o.data)} · ${statusLabel(o.status)}</p><p>Equipe: ${escapeHtml(o.tecnicoNome)}</p><p>Responsável: ${escapeHtml(o.responsavelNome)}</p><p>Motivo: ${escapeHtml(o.motivo)}</p><p>Pendências: ${escapeHtml(o.pendencias)}</p></div>`).join('') || '<p>Nenhum chamado neste período.</p>'}</div>`;
+ <p class="table-hint">Deslize a tabela para os lados para ver todas as colunas.</p>
+ <div class="dashboard-table-wrap" role="region" aria-label="Tabela de atendimentos mensais" tabindex="0"><table class="dashboard-table"><caption>Atendimentos de ${escapeHtml(dashboardFilters.month)}</caption><thead><tr>${MONTHLY_HEADERS.map(label=>`<th scope="col">${escapeHtml(label)}</th>`).join('')}</tr></thead><tbody>${rows.map(o=>`<tr>${monthlyColumns(o).map(value=>`<td>${escapeHtml(value === '' ? '—' : value)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="10">Nenhum chamado neste período.</td></tr>`}</tbody></table></div></div>`;
 }
 function filteredDashboard() { return (dashboardData|| (state.role==='VISUALIZADOR'?OS_LIST:[])).filter(o=>o.data?.startsWith(dashboardFilters.month) && o.cliente.nome.toLocaleLowerCase().includes(dashboardFilters.client.toLocaleLowerCase()) && (!dashboardFilters.tech||o.tecnicoIds.includes(dashboardFilters.tech)) && (!dashboardFilters.status||o.status===dashboardFilters.status)); }
+const MONTHLY_HEADERS=['OS','Data','Cliente','Equipe atribuída','Responsável pelo check-in','Status','Serviço','Motivo','Pendências','Duração (min)'];
 function monthlyColumns(o) { return [o.id,o.data,o.cliente.nome,o.tecnicoNome,o.responsavelNome,statusLabel(o.status),o.tipoServico==='PERSONALIZADO'?o.tipoServicoPersonalizado:serviceLabel(o.tipoServico).replace(/^[^\p{L}\p{N}]+/u,''),o.motivo,o.pendencias,o.minutos??'']; }
 function monthlyCSV() {
  const table=[['OS','Data','Cliente','Equipe atribuída','Responsável pelo check-in','Status','Serviço','Motivo','Pendências','Duração (minutos)'],...filteredDashboard().map(monthlyColumns)];
@@ -41,14 +43,37 @@ function monthlyCSV() {
  const url=URL.createObjectURL(new Blob(['\uFEFF'+table.map(row=>row.map(value).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`TAAG-${dashboardFilters.month}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function monthlyPDF() {
- const doc=new window.jspdf.jsPDF();let y=20;const rows=filteredDashboard();
- const line=(text,size=10)=>{doc.setFontSize(size);for(const part of doc.splitTextToSize(String(text),178)){if(y>277){doc.addPage();y=20;}doc.text(part,16,y);y+=size*.45+2;}};
- line('TAAG | Relatório mensal',18);line('Mês da agenda: '+dashboardFilters.month);line('Filtros: cliente '+(dashboardFilters.client||'Todos')+' | técnico '+(TECNICOS.find(t=>t.id===dashboardFilters.tech)?.nome||'Todos')+' | status '+(dashboardFilters.status?statusLabel(dashboardFilters.status):'Todos'));
- line(`${rows.length} chamados | ${rows.filter(o=>o.status==='CONCLUIDO').length} concluídos | ${new Set(rows.map(o=>o.cliente.nome)).size} clientes`);line('Equipe = atribuição na OS. Responsável = autor do check-in.');
- const counts=new Map();rows.forEach(o=>counts.set(o.cliente.nome,(counts.get(o.cliente.nome)||0)+1));for(const [client,count] of counts)line(`${client}: ${count} chamado(s)`);
- for(const o of rows){if(y>232){doc.addPage();y=20;}y+=5;line(`${o.data} | ${o.cliente.nome} | OS ${o.id}`,12);line(`Equipe: ${o.tecnicoNome}`);line(`Responsável: ${o.responsavelNome}`);line(`Status: ${statusLabel(o.status)} | Serviço: ${monthlyColumns(o)[6]}`);line(`Motivo: ${o.motivo}`);line(`Pendências: ${o.pendencias} | Duração: ${o.minutos??'Não registrada'} min`);}
- const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(8);doc.text(`${p}/${pages}`,185,290);}doc.save(`TAAG-${dashboardFilters.month}.pdf`);
+ const doc=new window.jspdf.jsPDF({orientation:'landscape'});
+ const rows=filteredDashboard(), widths=[24,19,31,28,28,22,29,43,27,16];
+ const left=15, bottom=194, leading=4, padding=2; let y=17;
+ const textLine=(text,size=10)=>{doc.setFontSize(size);for(const part of doc.splitTextToSize(String(text),267)){if(y>bottom-12){doc.addPage();y=17;}doc.text(part,left,y);y+=5;}};
+ textLine('TAAG | Relatório mensal',17);
+ textLine('Mês da agenda: '+dashboardFilters.month);
+ textLine('Filtros: cliente '+(dashboardFilters.client||'Todos')+' | técnico '+(TECNICOS.find(t=>t.id===dashboardFilters.tech)?.nome||'Todos')+' | status '+(dashboardFilters.status?statusLabel(dashboardFilters.status):'Todos'));
+ textLine(`${rows.length} chamados | ${rows.filter(o=>o.status==='CONCLUIDO').length} concluídos | ${new Set(rows.map(o=>o.cliente.nome)).size} clientes`);
+ textLine('Equipe = atribuição na OS. Responsável = autor do check-in.');y+=3;
+ const cells=values=>{doc.setFontSize(8);return values.map((value,i)=>doc.splitTextToSize(String(value===''?'—':value),widths[i]-padding*2));};
+ const draw=(lines,count,header=false,stripe=false)=>{
+  const height=count*leading+padding*2;let x=left;
+  doc.setFont('helvetica',header?'bold':'normal');doc.setFontSize(8);
+  lines.forEach((parts,i)=>{
+   doc.setFillColor(...(header?[232,180,83]:stripe?[246,246,246]:[255,255,255]));doc.setDrawColor(190,190,190);doc.setLineWidth(.15);doc.rect(x,y,widths[i],height,'FD');doc.setTextColor(25,25,25);
+   parts.forEach((part,n)=>doc.text(part,x+padding,y+padding+3+n*leading));x+=widths[i];
+  });y+=height;
+ };
+ const header=()=>{doc.setFont('helvetica','bold');const lines=cells(MONTHLY_HEADERS);draw(lines,Math.max(...lines.map(c=>c.length)),true);doc.setFont('helvetica','normal');};
+ const nextPage=()=>{doc.addPage();y=15;header();};
+ if(y>bottom-30){doc.addPage();y=15;}header();
+ rows.forEach((o,index)=>{
+  const lines=cells(monthlyColumns(o));let remaining=Math.max(...lines.map(c=>c.length));
+  if(remaining*leading+padding*2<=150 && y+remaining*leading+padding*2>bottom)nextPage();
+  // Linhas excepcionalmente longas continuam na próxima página, sem cortar texto.
+  while(remaining>0){let capacity=Math.floor((bottom-y-padding*2)/leading);if(capacity<1){nextPage();capacity=Math.floor((bottom-y-padding*2)/leading);}const count=Math.min(capacity,remaining);draw(lines.map(c=>c.splice(0,count)),count,false,index%2===1);remaining-=count;if(remaining>0)nextPage();}
+ });
+ if(!rows.length)textLine('Nenhum chamado neste período.');
+ const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(8);doc.text(`${p}/${pages}`,274,204);}doc.save(`TAAG-${dashboardFilters.month}.pdf`);
 }
+
 function bindFeatures() {
  document.getElementById('sessionActions').hidden=!state.currentUser;
  const app=document.getElementById('app');const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
@@ -61,7 +86,7 @@ function bindFeatures() {
   screen.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>nav(el.dataset.nav));
   if(state.role==='VISUALIZADOR'){app.querySelectorAll('[data-set-aba]').forEach(el=>{if(el.dataset.setAba!=='perfil')el.remove();});}
  }
- if(state.view==='admin_panel'){const btn=document.createElement('button');btn.className='btn btn-outline';btn.textContent='Dashboard mensal';btn.onclick=openDashboard;app.querySelector('.screen').prepend(btn);}
+ if(state.view==='admin_panel'){const btn=document.createElement('button');btn.className='btn btn-outline dashboard-entry';btn.textContent='Dashboard mensal';btn.onclick=openDashboard;app.querySelector('.screen').prepend(btn);}
  if(state.view==='tech_report'){
   const o=findOS(state.params.id);const btn=document.createElement('button');btn.className='btn btn-outline';btn.textContent=o.edicoesRelatorio?'Relatório já editado (limite atingido)':'Editar relatório (1 vez)';btn.disabled=!ownsReport(o)||Boolean(o.edicoesRelatorio);if(ownsReport(o))app.querySelector('.screen').append(btn);
   btn.onclick=()=>{reportDraft=structuredClone(o);nav('tech_exec',{id:o.id});};

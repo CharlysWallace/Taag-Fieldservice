@@ -412,3 +412,14 @@ input[type=range]{ width:100%; margin-top:18px; accent-color:var(--accent); }
 .settings-actions{display:grid;gap:14px;margin-bottom:24px;}
 #app .screen > .btn + .btn{margin-top:14px;}
 #app .settings-actions .btn{margin:0;min-height:48px;}
+
+/* Dashboard com espaço próprio e tabela rolável no celular. */
+#app .screen > .dashboard-entry{margin:12px 0 28px;}
+#app .settings-actions #settingsDashboard{margin:10px 0;}
+.table-hint{margin:24px 0 12px;color:var(--text-muted);font-size:13px;}
+.dashboard-table-wrap{overflow-x:auto;margin-bottom:24px;border:1px solid var(--border);border-radius:12px;}
+.dashboard-table{border-collapse:collapse;min-width:1150px;width:100%;font-size:13px;line-height:1.5;}
+.dashboard-table caption{text-align:left;padding:14px;color:var(--text-muted);}
+.dashboard-table th,.dashboard-table td{padding:14px 16px;border:1px solid var(--border);text-align:left;vertical-align:top;max-width:260px;overflow-wrap:anywhere;}
+.dashboard-table th{background:#362819;color:#ffd595;}
+.dashboard-table tbody tr:nth-child(even){background:var(--surface-2);}
