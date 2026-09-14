@@ -19,7 +19,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <!-- estilos do app, em arquivo próprio (mesma pasta do index.html) -->
-<link rel="stylesheet" href="style.css?v=20260913-1">
+<link rel="stylesheet" href="style.css?v=20260914-1">
 </head>
 <body>
 <div class="splash" id="splash" role="status" aria-label="Carregando o sistema">
@@ -41,14 +41,16 @@
   <div id="deviceHelp" class="device-help" hidden>O horário acompanha seu aparelho. Bateria disponível somente nos navegadores compatíveis; se aparecer “—”, consulte a barra do celular. A conexão indica Online/Offline, não as barras de sinal da operadora. As notificações do sistema aparecem no sino enquanto o app está aberto.</div>
 
   <div id="app"></div>
-  <button id="sessionLogout" class="session-logout" hidden type="button">Sair do sistema</button>
+  <footer id="sessionActions" class="session-actions" aria-label="Ações do sistema" hidden>
+    <div class="session-secondary"><button id="sessionLogout" class="session-logout" hidden type="button">Sair do sistema</button></div>
+  </footer>
   <div id="toast"></div>
 </div>
 
 <!-- lógica do app, em arquivo próprio (mesma pasta do index.html) -->
-<script src="device-status.js?v=20260913-1"></script>
-<script src="report.js?v=20260913-1"></script>
-<script src="features.js?v=20260913-1"></script>
-<script src="app.js?v=20260913-1"></script>
+<script src="device-status.js?v=20260914-1"></script>
+<script src="report.js?v=20260914-1"></script>
+<script src="features.js?v=20260914-1"></script>
+<script src="app.js?v=20260914-1"></script>
 </body>
 </html>
