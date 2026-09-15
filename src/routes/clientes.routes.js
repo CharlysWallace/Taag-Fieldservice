@@ -10,7 +10,7 @@ function validate(body) {
     if (typeof value !== 'string' || value.length > max) throw new Error(`Campo ${key} inválido.`);
     values[key] = value.trim();
   }
-  if (!values.nome || !values.endereco || !values.telefone || !values.tipoSistema) throw new Error('Preencha nome, endereço, telefone e tipo do sistema.');
+  if (!values.nome || !values.endereco || !values.tipoSistema) throw new Error('Preencha nome, endereço e tipo do sistema.');
   return values;
 }
 router.get('/', async (req, res, next) => {
