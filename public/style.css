@@ -439,3 +439,38 @@ input[type=range]{ width:100%; margin-top:18px; accent-color:var(--accent); }
 .topbar h1{font-size:18px;line-height:1.35;text-align:center;}
 .topbar .icon-btn{min-width:44px;min-height:44px;}
 .client-card [data-delete-client],.remove-photo{margin-top:14px;}
+
+/* Desktop workspace. Mobile rules remain unchanged below 900px. */
+@media (min-width:900px){
+ body{padding:24px;align-items:stretch;}
+ .phone-frame{width:min(1440px,100%);height:calc(100dvh - 48px);max-height:none;border:1px solid var(--border);border-radius:20px;box-shadow:0 16px 60px #0005;}
+ .notch{display:none;}
+ .status-bar{height:44px;padding:0 32px;border-bottom:1px solid var(--border);}
+ #app{min-height:0;scrollbar-gutter:stable;}
+ #app::-webkit-scrollbar{width:8px;}
+ #app::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+ .topbar{padding:18px 32px;margin-bottom:24px;}
+ .topbar h1{font-size:24px;text-align:left;}
+ #app .screen{width:100%;max-width:1280px;margin:0 auto;padding:0 32px 32px;}
+ #app[data-view="login"] .screen,#app[data-view="password"] .screen{max-width:480px;padding-top:40px;}
+ #app[data-view="admin_new"] .screen,#app[data-view="tech_signature"] .screen{max-width:800px;}
+ #app[data-view="tech_detail"] .screen,#app[data-view="team_progress"] .screen{max-width:900px;}
+ .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;}
+ .stat-card{padding:24px;}
+ .filters{gap:16px;}
+ .agenda-filters{display:grid;grid-template-columns:minmax(160px,1fr) minmax(320px,2fr) minmax(130px,1fr);gap:16px;align-items:end;}
+ .agenda-filters>.agenda-dates:last-child{grid-column:1/-1;justify-self:end;width:360px;}
+ .agenda-filters .field{margin:0;min-width:0;}
+ #clientList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;}
+ .client-card{margin:0;}
+ .client-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;}
+ .client-form h2,.client-form #clientError{grid-column:1/-1;}
+ .client-form .field{margin:0;min-width:0;}
+ .photo-evidence-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start;}
+ .settings-actions{grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;}
+ .session-actions{flex-direction:row;justify-content:flex-end;align-items:center;padding:16px 32px;gap:20px;}
+ .session-secondary{width:190px;flex:none;}
+ #fixedNewOS{width:260px;}
+ .dashboard-table{min-width:1100px;}
+ #app .screen>.dashboard-entry,#refreshAgenda{width:auto;min-width:220px;}
+}

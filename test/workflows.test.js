@@ -15,6 +15,15 @@ test('equipes, edição única, acesso gerencial, recuperação e exclusões aut
  async function request(route,method='GET',body,cookie){const res=await fetch(`http://127.0.0.1:${port}/api${route}`,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body===undefined?undefined:JSON.stringify(body)});return{status:res.status,data:await res.json(),cookie:res.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ')};}
  const sessions={};for(const name of ['admin','first','second','outside','viewer']){const r=await request('/auth/login','POST',{email:name+'@example.test',senha:password});assert.equal(r.status,200);sessions[name]=r.cookie;assert.equal(r.data.usuario.senhaHash,undefined);assert.equal(r.data.usuario.passwordResets,undefined);}
  const req=(role,url,method,body)=>request(url,method,body,sessions[role]);
+ await t.test('cliente permite omitir e limpar telefone, mantendo campos obrigatórios',async()=>{
+  const body={nome:'Sem telefone',endereco:'Rua teste',tipoSistema:'Rede'};
+  const created=await req('admin','/clientes','POST',body);assert.equal(created.status,201);assert.equal(created.data.cliente.telefone,'');
+  const url='/clientes/'+created.data.cliente.id;
+  assert.equal((await req('admin',url,'PUT',{...body,telefone:'11999990000'})).status,200);
+  const cleared=await req('admin',url,'PUT',{...body,telefone:''});assert.equal(cleared.status,200);assert.equal(cleared.data.cliente.telefone,'');
+  assert.equal((await req('admin','/clientes','POST',{...body,nome:''})).status,400);
+  assert.equal((await req('admin',url,'DELETE')).status,200);
+ });
  await t.test('uma OS para equipe, primeiro check-in vence atomicamente',async()=>{
   const create=await req('admin','/os','POST',{clienteId:'c1',tecnicoIds:['t1','t2'],tipoServico:'SUPORTE',data:'2026-09-13',hora:'10:00'});assert.equal(create.status,201);const id=create.data.os.id;t.osId=id;
   for(const role of ['first','second'])assert.equal((await req(role,'/os')).data.ordens[0].id,id);

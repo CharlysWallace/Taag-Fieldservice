@@ -319,7 +319,7 @@ function screenTechDetail(){
     <div class="card" style="margin-bottom:16px;">
       <b style="font-size:17px;">${escapeHtml(o.cliente.nome)}</b>
       <div style="color:var(--text-muted); font-size:13.5px; margin-top:6px; display:flex; gap:6px;">${iconPin()} ${escapeHtml(o.cliente.endereco)}</div>
-      <div style="color:var(--text-muted); font-size:13.5px; margin-top:4px;">📞 ${escapeHtml(o.cliente.telefone)}</div>
+      <div style="color:var(--text-muted); font-size:13.5px; margin-top:4px;">📞 ${escapeHtml(o.cliente.telefone || 'Telefone não informado')}</div>
       <div style="margin-top:12px;"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
     </div>
 
@@ -560,10 +560,10 @@ function adminTabs(active) {
 function screenClientes() {
   const editing = CLIENTES.find(c => c.id === state.params.editId);
   const form = state.params.newClient || editing;
-  const fields = [['nome','Nome'],['endereco','Endereço'],['telefone','Telefone de contato'],['tipoSistema','Tipo do sistema'],['email','E-mail (opcional)']];
+  const fields = [['nome','Nome'],['endereco','Endereço'],['telefone','Telefone de contato (opcional)'],['tipoSistema','Tipo do sistema'],['email','E-mail (opcional)']];
   return `${topbar('Cadastro de clientes')}${adminTabs('clientes')}<div class="screen">
     <button class="btn btn-primary" id="newClientBtn">Cadastrar cliente</button>
-    ${form ? `<form id="clientForm" class="card client-form"><h2>${editing?'Editar cliente':'Novo cliente'}</h2>${fields.map(([key,label])=>`<div class="field"><label for="client-${key}">${label}</label><input id="client-${key}" type="${key==='telefone'?'tel':key==='email'?'email':'text'}" maxlength="${key==='endereco'?700:key==='tipoSistema'?500:key==='telefone'?80:key==='nome'?180:200}" ${key==='email'?'':'required'} value="${escapeHtml(editing?.[key])}"></div>`).join('')}<p id="clientError" role="alert"></p><button class="btn btn-primary" type="submit">Salvar cliente</button><button class="btn btn-ghost" id="cancelClient" type="button">Cancelar</button></form>` : ''}
+    ${form ? `<form id="clientForm" class="card client-form"><h2>${editing?'Editar cliente':'Novo cliente'}</h2>${fields.map(([key,label])=>`<div class="field"><label for="client-${key}">${label}</label><input id="client-${key}" type="${key==='telefone'?'tel':key==='email'?'email':'text'}" maxlength="${key==='endereco'?700:key==='tipoSistema'?500:key==='telefone'?80:key==='nome'?180:200}" ${['email','telefone'].includes(key)?'':'required'} value="${escapeHtml(editing?.[key])}"></div>`).join('')}<p id="clientError" role="alert"></p><button class="btn btn-primary" type="submit">Salvar cliente</button><button class="btn btn-ghost" id="cancelClient" type="button">Cancelar</button></form>` : ''}
     <div class="field"><label for="clientSearch">Buscar cliente cadastrado</label><input id="clientSearch" type="text" placeholder="Nome do cliente"></div>
     <div id="clientList">${CLIENTES.map(c=>`<article class="card client-card" data-client-name="${escapeHtml(c.nome.toLocaleLowerCase('pt-BR'))}"><h3>${escapeHtml(c.nome)}</h3><p>${escapeHtml(c.endereco)}</p><p>${escapeHtml(c.telefone)}</p><p><b>Sistema:</b> ${escapeHtml(c.tipoSistema || 'Não informado')}</p><button class="btn btn-outline" data-edit-client="${escapeHtml(c.id)}">Editar dados</button><button class="btn btn-danger" data-delete-client="${escapeHtml(c.id)}">Excluir cliente</button></article>`).join('')}</div><p id="clientEmpty" ${CLIENTES.length?'hidden':''}>Nenhum cliente encontrado.</p>
   </div>`;
@@ -733,6 +733,7 @@ const VIEWS = {
 function render(){
   prepareFeatures();
   if (state.currentUser && state.view === 'login') state.view = rootScreenFor(state.role);
+  document.getElementById('app').dataset.view = state.view;
   document.getElementById('app').innerHTML = VIEWS[state.view]();
   const exitButton = document.getElementById('sessionLogout');
   exitButton.hidden = !state.currentUser;
