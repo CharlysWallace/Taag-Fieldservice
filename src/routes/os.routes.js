@@ -41,7 +41,7 @@ router.post('/',requireRole('ADMIN'),wrap(async(req,res)=>{
   res.status(201).json({os:await related(os)});
 }));
 router.delete('/:id',requireRole('ADMIN'),wrap(async(req,res)=>{
-  await mutateCollection('ordens_servico',items=>{const o=find(items,req.params.id);if(o.status==='CONCLUIDO')fail(403,'Relatórios concluídos não podem ser excluídos pelo administrador.');items.splice(items.indexOf(o),1);});res.json({ok:true});
+  await mutateCollection('ordens_servico',items=>{const o=find(items,req.params.id);items.splice(items.indexOf(o),1);});res.json({ok:true});
 }));
 router.post('/:id/checkin',requireRole('TECNICO'),wrap(async(req,res)=>{
   let os;await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);assigned(os,req);if(os.status!=='PENDENTE')fail(409,'O check-in já foi registrado por um integrante da equipe.');os.status='EM_ANDAMENTO';os.responsavelUsuarioId=req.session.userId;os.responsavelTecnicoId=req.session.tecnicoId;os.checkin={timestamp:new Date().toISOString(),tecnicoId:req.session.tecnicoId};});
@@ -65,6 +65,16 @@ router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
 router.post('/:id/fotos',requireRole('TECNICO'),wrap(async(req,res)=>{
   const {categoria,dataUrl}=req.body || {};if(!categories.includes(categoria) || !imageOK(dataUrl))fail(400,'Envie uma imagem válida de até aproximadamente 5 MB.');let fotos;
   await mutateCollection('ordens_servico',items=>{const os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Fotos só podem ser anexadas durante o atendimento; para relatório concluído use a edição única.');os.fotos ||= [];os.fotos.push({id:genId('foto'),categoria,src:dataUrl,descricao:'',criadoEm:new Date().toISOString()});fotos=os.fotos;});res.status(201).json({fotos});
+}));
+router.delete('/:id/fotos/:fotoId',requireRole('TECNICO'),wrap(async(req,res)=>{
+  let fotos;
+  await mutateCollection('ordens_servico',items=>{
+    const os=find(items,req.params.id);responsible(os,req);
+    if(os.status!=='EM_ANDAMENTO')fail(409,'Para remover fotos de um relatório concluído, use a edição única.');
+    const index=(os.fotos||[]).findIndex(f=>f.id===req.params.fotoId);
+    if(index<0)fail(404,'Foto não encontrada.');
+    os.fotos.splice(index,1);fotos=os.fotos;
+  });res.json({fotos});
 }));
 router.patch('/:id/fotos/:fotoId',requireRole('TECNICO'),wrap(async(req,res)=>{
   const descricao=req.body?.descricao;

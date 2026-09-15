@@ -36,4 +36,14 @@ router.put('/:id', async (req, res, next) => {
     res.json({ cliente });
   } catch (err) { next(err); }
 });
+router.delete('/:id', async (req,res,next)=>{
+  try {
+    const cliente=(await readCollection('clientes')).find(c=>c.id===req.params.id);
+    if(!cliente)return res.status(404).json({erro:'Cliente não encontrado.'});
+    // Preserve historical orders created before client snapshots were introduced.
+    await mutateCollection('ordens_servico',items=>{for(const o of items)if(o.clienteId===cliente.id&&!o.clienteSnapshot)o.clienteSnapshot={...cliente};});
+    await mutateCollection('clientes',items=>{const index=items.findIndex(c=>c.id===cliente.id);if(index>=0)items.splice(index,1);});
+    res.json({ok:true});
+  }catch(err){next(err);}
+});
 module.exports = router;

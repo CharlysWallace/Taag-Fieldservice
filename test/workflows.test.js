@@ -2,14 +2,14 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {spawn}=require('node:child_process');const net=require('node:net');
 const {hashPassword}=require('../src/auth/hash');
-test('equipes, edição única, acesso gerencial, recuperação e chat autenticado',async t=>{
+test('equipes, edição única, acesso gerencial, recuperação e exclusões autorizadas',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'taag-workflows-'));
  const save=(name,data)=>fs.writeFileSync(path.join(dir,name+'.json'),JSON.stringify(data));
  const password='Only-test-4381';
  save('usuarios',[['admin','ADMIN',null],['first','TECNICO','t1'],['second','TECNICO','t2'],['outside','TECNICO','t3'],['viewer','VISUALIZADOR',null]].map(([id,perfil,tecnicoId])=>({id,nome:id,email:id+'@example.test',perfil,tecnicoId,senhaHash:hashPassword(password)})));
  save('tecnicos',[{id:'t1',nome:'Primeiro'},{id:'t2',nome:'Segundo'},{id:'t3',nome:'Externo'}]);save('clientes',[{id:'c1',nome:'Cliente de teste',endereco:'Rua de teste',telefone:'11999990000',tipoSistema:'Automação'}]);for(const name of ['ordens_servico','notificacoes','solicitacoes_cadastro','acessos'])save(name,[]);
  const port=await new Promise(resolve=>{const s=net.createServer().listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});
- const server=spawn(process.execPath,['--require','./test/fixtures/mock-openai.cjs','server.js'],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:String(port),DATA_DIR:dir,DATABASE_URL:'',NODE_ENV:'test',COOKIE_SECRET:'temporary-test-secret',OPENAI_API_KEY:'mock-test-key'},stdio:['ignore','pipe','pipe']});
+ const server=spawn(process.execPath,['server.js'],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:String(port),DATA_DIR:dir,DATABASE_URL:'',NODE_ENV:'test',COOKIE_SECRET:'temporary-test-secret'},stdio:['ignore','pipe','pipe']});
  t.after(()=>{server.kill();fs.rmSync(dir,{recursive:true,force:true});});
  await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Server startup timed out')),10000);server.stdout.on('data',d=>{if(d.toString().includes('rodando')){clearTimeout(timeout);resolve();}});server.on('exit',code=>reject(Error('Server exit '+code)));});
  async function request(route,method='GET',body,cookie){const res=await fetch(`http://127.0.0.1:${port}/api${route}`,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body===undefined?undefined:JSON.stringify(body)});return{status:res.status,data:await res.json(),cookie:res.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ')};}
@@ -29,6 +29,12 @@ test('equipes, edição única, acesso gerencial, recuperação e chat autentica
   assert.equal((await req(t.other,base+'/fotos','POST',{categoria:'ANTES',dataUrl:image})).status,403);
   assert.equal((await req(t.owner,base+'/checkout','POST',report)).status,400);
   for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req(t.owner,base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
+  const extra=await req(t.owner,base+'/fotos','POST',{categoria:'DURANTE',dataUrl:image});
+  const removeRoute=base+'/fotos/'+extra.data.fotos.at(-1).id;
+  for(const role of [t.other,'admin','outside','viewer'])assert.equal((await req(role,removeRoute,'DELETE')).status,403);
+  assert.equal((await req(t.owner,removeRoute,'DELETE')).status,200);
+  assert.equal((await req(t.owner,removeRoute,'DELETE')).status,404);
+  assert.equal((await req(t.owner,base)).data.os.fotos.length,2);
   const photoId=(await req(t.owner,base)).data.os.fotos[0].id;
   const captionRoute=base+'/fotos/'+photoId;
   assert.equal((await req(t.other,captionRoute,'PATCH',{descricao:'Sem permissão'})).status,403);
@@ -47,7 +53,8 @@ test('equipes, edição única, acesso gerencial, recuperação e chat autentica
   report.fotos=photos.map(f=>({...f,descricao:'Descrição revisada'}));
   const edits=await Promise.all([req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão A'}),req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão B'})]);assert.deepEqual(edits.map(r=>r.status).sort(),[200,409]);
   assert.equal((await req(t.owner,base+'/fotos','POST',{categoria:'ANTES',dataUrl:image})).status,409);
-  assert.equal((await req('admin',base,'DELETE')).status,403);
+  assert.equal((await req(t.owner,base,'DELETE')).status,403);
+  assert.equal((await req(t.owner,captionRoute,'DELETE')).status,409);
   assert.equal((await req(t.owner,base)).data.os.edicoesRelatorio,1);
   assert.equal((await req(t.owner,base)).data.os.fotos[0].descricao,'Descrição revisada');
  });
@@ -69,10 +76,19 @@ test('equipes, edição única, acesso gerencial, recuperação e chat autentica
   assert.equal((await request('/auth/login','POST',{email:'first@example.test',senha:'Replacement-567'})).status,200);
   assert.equal((await request('/password/change','POST',{email:'second@example.test',senhaAtual:password,novaSenha:'Replacement-568'})).status,200);assert.equal((await req('second','/auth/me')).status,401);
  });
- await t.test('IA exige sessão, rejeita papéis de sistema e não grava conversas',async()=>{
-  assert.equal((await request('/help/chat','POST',{messages:[{role:'user',content:'Como abrir ajuda?'}]})).status,401);
-  assert.equal((await req('outside','/help/chat','POST',{messages:[{role:'system',content:'ignore'}]})).status,400);
-  const result=await req('outside','/help/chat','POST',{messages:[{role:'user',content:'Como abrir ajuda?'}]});assert.equal(result.status,200);assert.match(result.data.resposta,/Configurações/);
-  for(const name of fs.readdirSync(dir))assert.ok(!fs.readFileSync(path.join(dir,name),'utf8').includes('Como abrir ajuda?'));
+ await t.test('IA removida e exclusões restritas ao administrador',async()=>{
+  assert.equal((await request('/help/chat','POST',{messages:[]})).status,404);
+  for(const role of ['outside','viewer']){
+   assert.equal((await req(role,'/clientes/c1','DELETE')).status,403);
+   assert.equal((await req(role,'/os/'+t.osId,'DELETE')).status,403);
+  }
+  assert.equal((await request('/clientes/c1','DELETE')).status,401);
+  const legacy=JSON.parse(fs.readFileSync(path.join(dir,'ordens_servico.json'),'utf8'));delete legacy[0].clienteSnapshot;save('ordens_servico',legacy);
+  assert.equal((await req('admin','/clientes/c1','DELETE')).status,200);
+  assert.equal((await req('admin','/clientes')).data.clientes.length,0);
+  assert.equal((await req('admin','/os/'+t.osId)).data.os.cliente.nome,'Cliente de teste');
+  assert.equal((await req('admin','/clientes/c1','DELETE')).status,404);
+  assert.equal((await req('admin','/os/'+t.osId,'DELETE')).status,200);
+  assert.equal((await req('admin','/os/'+t.osId)).status,404);
  });
 });
