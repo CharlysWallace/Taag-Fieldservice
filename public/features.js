@@ -78,12 +78,11 @@ function bindFeatures() {
  bindPhotoDescriptions();
  document.getElementById('sessionActions').hidden=!state.currentUser;
  const app=document.getElementById('app');const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
- let help=document.getElementById('sessionHelp');if(!help){help=document.createElement('button');help.id='sessionHelp';help.className='session-logout';help.textContent='Ajuda · Taagzinho';document.getElementById('sessionLogout').before(help);}help.hidden=!state.currentUser;help.onclick=openHelp;
  let fab=document.getElementById('fixedNewOS');if(!fab){fab=document.createElement('button');fab.id='fixedNewOS';fab.className='fab';fab.innerHTML='<span aria-hidden="true">+</span> Nova agenda / OS';fab.setAttribute('aria-label','Criar nova OS');document.getElementById('sessionActions').prepend(fab);}fab.hidden=state.role!=='ADMIN'||state.view==='admin_new';fab.onclick=()=>nav('admin_new');
  document.getElementById('newOsBtn')?.remove();
  if(state.view==='settings'){
-  const screen=app.querySelector('.screen');screen.insertAdjacentHTML('afterbegin',`<div class="settings-actions"><button class="btn btn-outline" id="settingsHelp">Ajuda · Taagzinho</button>${state.role==='ADMIN'?'<button class="btn btn-primary" data-nav="admin_new">Criar nova OS</button><button class="btn btn-outline" id="settingsDashboard">Dashboard mensal</button><button class="btn btn-outline" data-nav="reset_admin">Redefinições de senha</button>':''}</div>`);
-  on('settingsHelp',openHelp);on('settingsDashboard',openDashboard);
+  const screen=app.querySelector('.screen');screen.insertAdjacentHTML('afterbegin',`<div class="settings-actions">${state.role==='ADMIN'?'<button class="btn btn-primary" data-nav="admin_new">Criar nova OS</button><button class="btn btn-outline" id="settingsDashboard">Dashboard mensal</button><button class="btn btn-outline" data-nav="reset_admin">Redefinições de senha</button>':''}</div>`);
+  on('settingsDashboard',openDashboard);
   screen.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>nav(el.dataset.nav));
   if(state.role==='VISUALIZADOR'){app.querySelectorAll('[data-set-aba]').forEach(el=>{if(el.dataset.setAba!=='perfil')el.remove();});}
  }
@@ -95,7 +94,6 @@ function bindFeatures() {
  if(reportDraft && state.view==='tech_exec'){
   app.querySelector('.screen').insertAdjacentHTML('afterbegin','<p class="card">Você pode salvar uma única edição. Corrija os dados e recolha a assinatura para confirmar.</p><button class="btn btn-ghost" id="cancelEdit">Cancelar edição</button>');
   on('cancelEdit',()=>{const id=reportDraft.id;reportDraft=null;nav('tech_report',{id});});
-  (reportDraft.fotos||[]).forEach((f,index)=>{const b=document.createElement('button');b.className='btn btn-ghost';b.textContent=`Remover foto ${index+1} (${f.categoria})`;b.onclick=()=>{reportDraft.fotos.splice(index,1);render();};app.querySelector('.screen').append(b);});
  }
  if(reportDraft&&state.view==='tech_signature')document.getElementById('finishBtn').textContent='Salvar única edição';
  on('refreshAgenda',async()=>{try{OS_LIST=(await apiGetOS()).ordens;render();}catch(e){toast(e.message);}});
@@ -115,23 +113,6 @@ function bindFeatures() {
 }
 async function openDashboard(push=true){try{const d=await api('/dashboard');dashboardData=d.ordens;TECNICOS=d.tecnicos;if(push)nav('view_dashboard');else render();}catch(e){toast(e.message);}}
 async function loadResets(){const list=document.getElementById('resetList');if(!list)return;list.textContent='Carregando…';try{const d=await api('/password/pending');list.innerHTML=d.solicitacoes.map(r=>`<div class="card"><b>${escapeHtml(r.nome)}</b><p>${escapeHtml(r.email)}</p><p>Protocolo: <strong>${escapeHtml(r.protocolo)}</strong></p><button class="btn btn-primary" data-reset="${r.id}" data-decision="APROVADO">Identidade e protocolo conferidos: aprovar</button><button class="btn btn-outline" data-reset="${r.id}" data-decision="RECUSADO">Recusar</button></div>`).join('')||'<p>Nenhuma solicitação pendente.</p>';list.querySelectorAll('[data-reset]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('/password/'+b.dataset.reset+'/decision',{method:'POST',body:{status:b.dataset.decision}});loadResets();}catch(e){toast(e.message);b.disabled=false;}});}catch(e){list.textContent=e.message;}}
-let helpMessages=[],helpController=null,helpPreviousFocus=null;
-function closeHelp(){helpController?.abort();helpController=null;helpMessages=[];document.getElementById('helpDialog')?.remove();helpPreviousFocus?.focus();helpPreviousFocus=null;}
-function openHelp(){
- if(!state.currentUser)return;if(document.getElementById('helpDialog'))return;
- helpPreviousFocus=document.activeElement;helpMessages=[];
- const dialog=document.createElement('dialog');dialog.id='helpDialog';dialog.setAttribute('aria-labelledby','helpTitle');dialog.innerHTML='<header><img src="taagzinho.png" alt="Robô Taagzinho"><div><h2 id="helpTitle">Taagzinho</h2><p>Ajuda com o FieldService</p></div></header><p class="help-notice">Conversa temporária, enviada à API OpenAI. Não envie senhas nem dados de clientes. Ao encerrar, o histórico é apagado do app.</p><div id="helpMessages" role="log" aria-live="polite"><p>Olá! Em qual função do aplicativo você precisa de ajuda?</p></div><form id="helpForm"><label for="helpInput">Sua dúvida</label><textarea id="helpInput" maxlength="4000" required></textarea><button class="btn btn-primary" id="helpSend">Enviar</button></form><button class="btn btn-outline" id="helpClose">Encerrar conversa</button>';
- document.body.append(dialog);dialog.showModal();document.getElementById('helpInput').focus();dialog.addEventListener('cancel',e=>{e.preventDefault();closeHelp();});document.getElementById('helpClose').onclick=closeHelp;
- const log=document.getElementById('helpMessages');const say=(who,text)=>{const p=document.createElement('p');const label=document.createElement('strong');label.textContent=who+': ';p.append(label,document.createTextNode(text));log.append(p);log.scrollTop=log.scrollHeight;};
- document.getElementById('helpForm').onsubmit=async e=>{
-  e.preventDefault();if(helpController)return;const input=document.getElementById('helpInput');const question=input.value.trim();if(!question)return;const button=document.getElementById('helpSend');button.disabled=true;input.value='';say('Você',question);
-  const candidate=[...helpMessages,{role:'user',content:question}].slice(-19);while(candidate.reduce((n,m)=>n+m.content.length,0)>19000&&candidate.length>1)candidate.shift();while(candidate[0]?.role==='assistant')candidate.shift();
-  const controller=new AbortController();helpController=controller;const timeout=setTimeout(()=>controller.abort(),35000);
-  try{const response=await fetch('/api/help/chat',{method:'POST',credentials:'include',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:candidate})});const data=await response.json();if(!response.ok)throw Error(data.erro||'Não foi possível responder.');if(!dialog.isConnected)return;helpMessages=[...candidate,{role:'assistant',content:data.resposta}];say('Taagzinho',data.resposta);}catch(err){if(dialog.isConnected)say('Aviso',err.name==='AbortError'?'O tempo de resposta terminou. Tente novamente.':err.message);}finally{clearTimeout(timeout);if(helpController===controller)helpController=null;if(dialog.isConnected){button.disabled=false;input.focus();}}
- };
-}
-window.addEventListener('pagehide',closeHelp);
-
 // Rascunhos preservados ao anexar outra foto; salvos antes de coletar a assinatura.
 const photoDescriptionDrafts=new Map();
 function photoDescriptionKey(osId,photoId){return osId+':'+photoId;}
@@ -139,7 +120,7 @@ function photoGallery(o,editable=false){
  if(!(o.fotos||[]).length)return '';
  return `<div class="section-label">Fotos do atendimento</div><div class="photo-evidence-list">${o.fotos.map((f,i)=>{
   const description=editable&&!reportDraft?(photoDescriptionDrafts.get(photoDescriptionKey(o.id,f.id))??f.descricao??''):(f.descricao||'');
-  return `<article class="photo-evidence"><img src="${escapeHtml(f.src)}" alt="Foto ${i+1} do atendimento"><p class="photo-category-label">Foto ${i+1} · ${escapeHtml(f.categoria)}</p>${editable?`<div class="photo-description-box"><label for="photo-description-${i}">Descrição da foto (opcional)</label><textarea id="photo-description-${i}" data-photo-description="${escapeHtml(f.id)}" maxlength="1000" placeholder="Descreva o que aparece nesta foto…">${escapeHtml(description)}</textarea><small data-photo-count="${escapeHtml(f.id)}">${description.length}/1000 caracteres</small>${reportDraft?'<small>A descrição será salva junto com a edição do relatório.</small>':`<button type="button" class="btn btn-outline" data-save-photo-description="${escapeHtml(f.id)}">Salvar descrição</button>`}</div>`:description?`<div class="photo-description-box"><b>Descrição da foto</b><p>${escapeHtml(description)}</p></div>`:''}</article>`;
+  return `<article class="photo-evidence"><img src="${escapeHtml(f.src)}" alt="Foto ${i+1} do atendimento"><p class="photo-category-label">Foto ${i+1} · ${escapeHtml(f.categoria)}</p>${editable?`<div class="photo-description-box"><label for="photo-description-${i}">Descrição da foto (opcional)</label><textarea id="photo-description-${i}" data-photo-description="${escapeHtml(f.id)}" maxlength="1000" placeholder="Descreva o que aparece nesta foto…">${escapeHtml(description)}</textarea><small data-photo-count="${escapeHtml(f.id)}">${description.length}/1000 caracteres</small>${reportDraft?'<small>A descrição será salva junto com a edição do relatório.</small>':`<button type="button" class="btn btn-outline" data-save-photo-description="${escapeHtml(f.id)}">Salvar descrição</button>`}</div><button type="button" class="btn btn-danger remove-photo" data-remove-photo="${escapeHtml(f.id)}">Remover foto ${i+1}</button>`:description?`<div class="photo-description-box"><b>Descrição da foto</b><p>${escapeHtml(description)}</p></div>`:''}</article>`;
  }).join('')}</div>`;
 }
 async function savePhotoDescription(o,id){
@@ -151,6 +132,17 @@ async function savePhotoDescription(o,id){
 }
 async function saveAllPhotoDescriptions(o){if(reportDraft)return;for(const f of o.fotos||[])await savePhotoDescription(o,f.id);}
 function bindPhotoDescriptions(){
+ document.querySelectorAll('[data-remove-photo]').forEach(button=>button.onclick=async()=>{
+  if(!confirm('Remover esta foto do relatório?'))return;
+  const o=findOS(state.params.id),id=button.dataset.removePhoto;button.disabled=true;
+  try{
+   // Preserve text and technical fields before rendering the updated gallery.
+   const description=document.getElementById('descField');if(description)o.descricao=description.value;
+   if(reportDraft){reportDraft.fotos=reportDraft.fotos.filter(f=>f.id!==id);}
+   else{const data=await api('/os/'+encodeURIComponent(o.id)+'/fotos/'+encodeURIComponent(id),{method:'DELETE'});o.fotos=data.fotos;}
+   photoDescriptionDrafts.delete(photoDescriptionKey(o.id,id));render();
+  }catch(e){toast(e.message);button.disabled=false;}
+ });
  document.querySelectorAll('[data-photo-description]').forEach(input=>{
   input.oninput=()=>{const o=findOS(state.params.id),id=input.dataset.photoDescription;
    if(reportDraft)o.fotos.find(f=>f.id===id).descricao=input.value;

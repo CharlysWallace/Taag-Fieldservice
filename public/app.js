@@ -122,7 +122,6 @@ function back() {
   render();
 }
 async function logout() {
-  closeHelp();
   try { await apiLogout(); } catch (e) { toast('Não foi possível sair. Verifique a conexão e tente novamente.'); return; }
   dashboardData = null; reportDraft = null; photoDescriptionDrafts.clear();
   state.role = null; state.currentUser = null; state.currentTech = null; state.history = [];
@@ -493,7 +492,7 @@ function screenAdminPanel(){
           <div class="meta" style="flex-wrap: wrap;">
             <span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span>
             ${o.status === 'CONCLUIDO' ? `<span class="chip" style="background:var(--surface-2); color:var(--text-muted);">Toque para ver relatório</span>` : ''}
-            ${o.status!=='CONCLUIDO'?`<button class="btn btn-danger small" data-del-os="${o.id}" style="margin-left:auto; padding: 4px 10px; font-size: 11px;">Excluir</button>`:''}
+            ${state.role==='ADMIN'?`<button class="btn btn-danger small" data-del-os="${o.id}" style="margin-left:auto; padding: 4px 10px; font-size: 11px;">Excluir</button>`:''}
           </div>
         </div>
       </div>`).join('') : `<div class="empty">Nenhuma OS encontrada com esses filtros.</div>`}
@@ -566,7 +565,7 @@ function screenClientes() {
     <button class="btn btn-primary" id="newClientBtn">Cadastrar cliente</button>
     ${form ? `<form id="clientForm" class="card client-form"><h2>${editing?'Editar cliente':'Novo cliente'}</h2>${fields.map(([key,label])=>`<div class="field"><label for="client-${key}">${label}</label><input id="client-${key}" type="${key==='telefone'?'tel':key==='email'?'email':'text'}" maxlength="${key==='endereco'?700:key==='tipoSistema'?500:key==='telefone'?80:key==='nome'?180:200}" ${key==='email'?'':'required'} value="${escapeHtml(editing?.[key])}"></div>`).join('')}<p id="clientError" role="alert"></p><button class="btn btn-primary" type="submit">Salvar cliente</button><button class="btn btn-ghost" id="cancelClient" type="button">Cancelar</button></form>` : ''}
     <div class="field"><label for="clientSearch">Buscar cliente cadastrado</label><input id="clientSearch" type="text" placeholder="Nome do cliente"></div>
-    <div id="clientList">${CLIENTES.map(c=>`<article class="card client-card" data-client-name="${escapeHtml(c.nome.toLocaleLowerCase('pt-BR'))}"><h3>${escapeHtml(c.nome)}</h3><p>${escapeHtml(c.endereco)}</p><p>${escapeHtml(c.telefone)}</p><p><b>Sistema:</b> ${escapeHtml(c.tipoSistema || 'Não informado')}</p><button class="btn btn-outline" data-edit-client="${escapeHtml(c.id)}">Editar dados</button></article>`).join('')}</div><p id="clientEmpty" ${CLIENTES.length?'hidden':''}>Nenhum cliente encontrado.</p>
+    <div id="clientList">${CLIENTES.map(c=>`<article class="card client-card" data-client-name="${escapeHtml(c.nome.toLocaleLowerCase('pt-BR'))}"><h3>${escapeHtml(c.nome)}</h3><p>${escapeHtml(c.endereco)}</p><p>${escapeHtml(c.telefone)}</p><p><b>Sistema:</b> ${escapeHtml(c.tipoSistema || 'Não informado')}</p><button class="btn btn-outline" data-edit-client="${escapeHtml(c.id)}">Editar dados</button><button class="btn btn-danger" data-delete-client="${escapeHtml(c.id)}">Excluir cliente</button></article>`).join('')}</div><p id="clientEmpty" ${CLIENTES.length?'hidden':''}>Nenhum cliente encontrado.</p>
   </div>`;
 }
 
@@ -755,6 +754,12 @@ function bindEvents(){
   const newClient = document.getElementById('newClientBtn');
   if (newClient) {
     newClient.onclick = () => { state.params = { newClient: true }; render(); };
+    app.querySelectorAll('[data-delete-client]').forEach(b=>b.onclick=async()=>{
+      if(!confirm('Excluir este cliente do cadastro? As informações já registradas nas ordens de serviço serão preservadas.'))return;
+      b.disabled=true;
+      try{await api('/clientes/'+encodeURIComponent(b.dataset.deleteClient),{method:'DELETE'});CLIENTES=CLIENTES.filter(c=>c.id!==b.dataset.deleteClient);state.params={};render();toast('Cliente excluído.');}
+      catch(e){toast(e.message);b.disabled=false;}
+    });
     app.querySelectorAll('[data-edit-client]').forEach(b => b.onclick = () => { state.params = { editId: b.dataset.editClient }; render(); });
     document.getElementById('clientSearch').oninput = event => {
       const term = event.target.value.trim().toLocaleLowerCase('pt-BR'); let count = 0;
@@ -975,7 +980,7 @@ function bindEvents(){
   app.querySelectorAll('[data-del-os]').forEach(b=>{
     b.onclick = async (ev)=>{
       ev.stopPropagation();
-      if(!confirm('Excluir esta ordem de serviço?')) return;
+      if(!confirm('Excluir definitivamente esta ordem de serviço e seu relatório, incluindo fotos e assinatura?')) return;
       const id = b.getAttribute('data-del-os');
       try{
         await apiDeleteOS(id);

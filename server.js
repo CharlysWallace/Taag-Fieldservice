@@ -82,7 +82,7 @@ app.use('/api/password', require('./src/routes/password.routes'));
 app.use('/api/auth', authRoutes);
 app.use('/api/clientes', require('./src/routes/clientes.routes'));
 app.use('/api/acessos', require('./src/routes/access.routes'));
-app.use('/api/help', require('./src/routes/help.routes'));
+app.all('/api/help/*', (req,res)=>res.status(404).json({erro:'Recurso removido.'}));
 app.use('/api/dashboard', require('./src/routes/dashboard.routes'));
 app.use('/api/os', osRoutes);
 app.use('/api/tecnicos', tecnicosRoutes);

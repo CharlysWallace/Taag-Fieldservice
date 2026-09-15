@@ -158,3 +158,10 @@ A cada novo push para a branch configurada, o Render pode fazer novo deploy auto
 ### Arquivo PostgreSQL
 
 `postgresql.sql` cria a tabela `app_collections` usando JSONB. Esta escolha é proposital para que a migração não mude nenhuma estrutura que o frontend já espera. Assim, telas, campos, rotas, login, OS, fotos, assinatura e notificações permanecem com o mesmo formato.
+
+## Exclusões e permissões
+
+- Apenas administradores excluem OS, inclusive concluídas. A confirmação informa que o relatório, fotos e assinatura também serão excluídos.
+- Na aba de cadastro de clientes, o administrador pode excluir um cliente. Os dados históricos das OS existentes são preservados; o cliente deixa de estar disponível para novas OS.
+- O técnico responsável pode remover fotos durante o atendimento. Após a conclusão, a remoção é feita na edição única, com nova assinatura e mantendo as fotos obrigatórias de antes e depois.
+- O agente de IA e seus acessos foram removidos. O aplicativo não utiliza mais a API OpenAI.
