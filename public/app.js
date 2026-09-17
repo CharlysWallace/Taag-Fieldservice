@@ -66,8 +66,6 @@ const apiCheckin = (id) => api(`/os/${id}/checkin`, { method: 'POST' });
 const apiCheckout = (id, payload) => api(`/os/${id}/checkout`, { method: 'POST', body: payload });
 const apiUploadFoto = (id, categoria, dataUrl) => api(`/os/${id}/fotos`, { method: 'POST', body: { categoria, dataUrl } });
 
-const apiGetNotifications = () => api('/notificacoes');
-const apiMarkNotificationsRead = () => api('/notificacoes/marcar-lidas', { method: 'POST' });
 
 /* ---------- 1. CACHES LOCAIS ----------
    Guardam, na memória do navegador, a última resposta do backend — pra
@@ -91,7 +89,7 @@ function updateOsCache(os) {
 /** Busca de uma vez tudo que as telas pós-login precisam — chamada após login e após restaurar sessão. */
 async function loadCoreData() {
   if (state.currentUser.perfil === 'VISUALIZADOR') { const d = await api('/dashboard'); TECNICOS=d.tecnicos; OS_LIST=d.ordens; ACCESS_CACHE=[]; PENDING_CACHE=[]; NOTIF_CACHE={naoLidas:0,notificacoes:[]}; return; }
-  const [tecRes, osRes, notifRes, accessRes] = await Promise.all([apiGetTecnicos(), apiGetOS(), apiGetNotifications(), api('/acessos')]);
+  const [tecRes, osRes, notifRes, accessRes] = await Promise.all([apiGetTecnicos(), apiGetOS(), Promise.resolve({naoLidas:0,notificacoes:[]}), api('/acessos')]);
   ACCESS_CACHE = accessRes.acessos;
   TECNICOS = tecRes.tecnicos;
   OS_LIST = osRes.ordens;
@@ -179,13 +177,13 @@ function topbar(title, {showBack=true, rolePill=true, settings=false, settingsBa
   const leftSlot = showBack
     ? `<button class="icon-btn back-btn" data-nav="back" aria-label="Voltar para a tela anterior">${iconBack()}<span>Voltar</span></button>`
     : (settings
-        ? `<button class="icon-btn" data-nav="settings" title="Configurações" style="position:relative;">${iconSettings()}${settingsBadge>0?'<span class="topbar-dot"></span>':''}</button>`
+        ? `<button class="icon-btn" data-nav="settings" title="Configurações" style="position:relative;">${iconSettings()}</button>`
         : `<div style="width:36px"></div>`);
   return `
   <div class="topbar">
     ${leftSlot}
     <h1>${title}</h1>
-    <button class="icon-btn notification-btn" data-notifications aria-label="Abrir notificações"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M9 21h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="notification-count">${NOTIF_CACHE.naoLidas || 0}</span></button>
+
   </div>`;
 }
 
@@ -283,7 +281,7 @@ function screenTechAgenda(){
     <div class="os-card st-${o.status}" data-open-os="${o.id}">
       <div class="time">${o.hora}<small>${escapeHtml(o.data.split('-').reverse().join('/'))}</small></div>
       <div class="info" style="flex:1">
-        <b>${escapeHtml(o.cliente.nome)}</b>
+        <b>${escapeHtml(o.cliente.nome)}</b><div class="service-preview">${osServiceLabel(o)}</div>
         <div class="addr">${iconPin()} ${escapeHtml(o.cliente.endereco)}</div><div class="addr">Equipe: ${escapeHtml(o.tecnicoNome)}</div>
         <div class="meta"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
       </div>
@@ -320,7 +318,7 @@ function screenTechDetail(){
       <b style="font-size:17px;">${escapeHtml(o.cliente.nome)}</b>
       <div style="color:var(--text-muted); font-size:13.5px; margin-top:6px; display:flex; gap:6px;">${iconPin()} ${escapeHtml(o.cliente.endereco)}</div>
       <div style="color:var(--text-muted); font-size:13.5px; margin-top:4px;">📞 ${escapeHtml(o.cliente.telefone || 'Telefone não informado')}</div>
-      <div style="margin-top:12px;"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
+      <p><b>Serviço:</b> ${osServiceLabel(o)}</p><div style="margin-top:12px;"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
     </div>
 
     <button class="btn btn-outline" id="routeBtn">📍 Como chegar?</button>
@@ -487,7 +485,7 @@ function screenAdminPanel(){
       <div class="os-card st-${o.status}" ${o.status==='CONCLUIDO' ? `data-open-admin="${o.id}"` : ''}>
         <div class="time">${o.hora}</div>
         <div class="info" style="flex:1">
-          <b>${escapeHtml(o.cliente.nome)}</b>
+          <b>${escapeHtml(o.cliente.nome)}</b><div class="service-preview">${osServiceLabel(o)}</div>
           <div class="addr">${iconPin()} ${escapeHtml(o.tecnicoNome)} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
           <div class="meta" style="flex-wrap: wrap;">
             <span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span>
@@ -634,7 +632,7 @@ function screenDashboard(){
       <div class="os-card st-${o.status}" data-view-os="${o.id}">
         <div class="time">${o.hora}</div>
         <div class="info" style="flex:1">
-          <b>${escapeHtml(o.cliente.nome)}</b>
+          <b>${escapeHtml(o.cliente.nome)}</b><div class="service-preview">${osServiceLabel(o)}</div>
           <div class="addr">${iconPin()} ${escapeHtml(o.tecnicoNome)} · ${new Date(o.data+'T00:00').toLocaleDateString('pt-BR')}</div>
           <div class="meta"><span class="chip ${o.status==='PENDENTE'?'pendente':o.status==='EM_ANDAMENTO'?'andamento':'concluido'}">${statusLabel(o.status)}</span></div>
         </div>
@@ -669,7 +667,6 @@ function screenSettings(){
   const dominioEmpresa = 'taagbrasil.com.br';
   const tipoLogin = u.email.toLowerCase().endsWith('@'+dominioEmpresa) ? 'Login corporativo (TAAG)' : 'Login pessoal';
 
-  const minhasNotifs = NOTIF_CACHE.notificacoes;
 
   return `
   ${topbar('Configurações')}
@@ -677,7 +674,6 @@ function screenSettings(){
     <div class="settings-tabs">
       <button class="settings-tab ${aba==='perfil'?'active':''}" data-set-aba="perfil">Perfil</button>
       <button class="settings-tab ${aba==='logins'?'active':''}" data-set-aba="logins">Meus logins</button>
-      <button class="settings-tab ${aba==='notif'?'active':''}" data-set-aba="notif">Notificações${NOTIF_CACHE.naoLidas?` <span class="tab-badge">${NOTIF_CACHE.naoLidas}</span>`:''}</button>
       ${isAdmin ? `<button class="settings-tab ${aba==='aprovacao'?'active':''}" data-set-aba="aprovacao">Aprovação${PENDING_CACHE.length?` <span class="tab-badge">${PENDING_CACHE.length}</span>`:''}</button>` : ''}
     </div>
 
@@ -706,13 +702,6 @@ function screenSettings(){
       ${ACCESS_CACHE.length ? ACCESS_CACHE.map(a=>`<div class="card access-card"><h3>${escapeHtml(a.sistema)}</h3><p><b>Usuário:</b> ${escapeHtml(a.usuario)}</p>${a.endereco ? `<p><a href="${escapeHtml(a.endereco)}" target="_blank" rel="noopener noreferrer">Abrir sistema</a></p>` : ''}${a.observacoes ? `<p class="access-notes">${escapeHtml(a.observacoes)}</p>` : ''}</div>`).join('') : '<p>Nenhum acesso cadastrado.</p>'}
     ` : ''}
 
-    ${aba==='notif' ? (minhasNotifs.length ? minhasNotifs.map(n=>`
-      <div class="notif-item ${n.lida?'':'unread'}">
-        <div class="notif-msg">${n.mensagem}</div>
-        <div class="notif-date">${new Date(n.criadoEm).toLocaleString('pt-BR')}</div>
-      </div>
-    `).join('') : `<div class="empty">Nenhuma notificação por enquanto.</div>`) : ''}
-
     ${aba==='aprovacao' && isAdmin ? `
       <div class="card">
         <div style="font-size:13.5px;">${PENDING_CACHE.length} ${PENDING_CACHE.length===1?'solicitação':'solicitações'} de cadastro aguardando aprovação.</div>
@@ -731,6 +720,7 @@ const VIEWS = {
 };
 
 function render(){
+  if(!state.currentUser && !['login','password','pending_registration','connection_error'].includes(state.view))state.view='login';
   prepareFeatures();
   if (state.currentUser && state.view === 'login') state.view = rootScreenFor(state.role);
   document.getElementById('app').dataset.view = state.view;
@@ -748,10 +738,6 @@ function render(){
 function bindEvents(){
   const app = document.getElementById('app');
   app.querySelectorAll('[data-report-field]').forEach(el => { el.oninput = () => { const o = findOS(state.params.id); o.camposServico ||= {}; o.camposServico[el.dataset.reportField] = el.value; }; });
-  app.querySelectorAll('[data-notifications]').forEach(b => b.onclick = async () => {
-    try { NOTIF_CACHE = await apiGetNotifications(); await apiMarkNotificationsRead(); NOTIF_CACHE.naoLidas = 0; nav('settings', { aba: 'notif' }); }
-    catch (err) { toast(err.message); }
-  });
   const newClient = document.getElementById('newClientBtn');
   if (newClient) {
     newClient.onclick = () => { state.params = { newClient: true }; render(); };
@@ -902,8 +888,7 @@ function bindEvents(){
       try{
         await apiRegister(nome, email, senha);
         toast('Cadastro enviado! Aguarde a aprovação do administrador.');
-        goToLogin.click();
-        emailEl.value = email;
+        state.currentUser=null;state.role=null;state.history=[];nav('pending_registration');
       }catch(err){
         regErrEl.textContent = err.message || 'Não foi possível enviar o cadastro.';
         regErrEl.style.display = 'block';
@@ -1036,12 +1021,6 @@ function bindEvents(){
   app.querySelectorAll('[data-set-aba]').forEach(b=>{
     b.onclick = async ()=>{
       state.params.aba = b.getAttribute('data-set-aba');
-      if(state.params.aba === 'notif' && NOTIF_CACHE.naoLidas > 0){
-        try{
-          await apiMarkNotificationsRead();
-          NOTIF_CACHE = await apiGetNotifications();
-        }catch(err){ /* falha ao marcar como lida não deve travar a navegação */ }
-      }
       render();
     };
   });
@@ -1094,7 +1073,7 @@ function bindEvents(){
         hora: document.getElementById('fHora').value,
       });
       OS_LIST.push(os);
-      toast('Ordem de serviço criada — o técnico foi notificado');
+      toast('Ordem de serviço criada');
       nav('admin_panel');
     }catch(err){
       toast(err.message || 'Não foi possível criar a ordem de serviço.');
@@ -1250,10 +1229,6 @@ async function gerarPDF(o){
    requisição). Se existir sessão válida, pulamos direto pra tela
    certa — sem isso, a pessoa teria que logar de novo a cada F5.
    ============================================================ */
-function tickClock(){
-  document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-}
-
 (async function init(){
   const tempoMinimoSplash = new Promise(r=>setTimeout(r, 1200));
 
@@ -1271,22 +1246,5 @@ function tickClock(){
 
   await tempoMinimoSplash;
   render();
-  tickClock(); setInterval(tickClock, 30000);
   document.getElementById('splash').style.display = 'none';
 })();
-
-let notificationRefreshBusy = false;
-async function refreshNotificationBadge() {
-  if (!state.currentUser || document.hidden || notificationRefreshBusy) return;
-  const userId = state.currentUser.id; notificationRefreshBusy = true;
-  try {
-    const data = await apiGetNotifications();
-    if (state.currentUser?.id !== userId) return;
-    NOTIF_CACHE = data;
-    document.querySelectorAll('.notification-count').forEach(el => { el.textContent = data.naoLidas || 0; });
-  } catch { /* O próximo ciclo tenta novamente, sem interromper o atendimento. */ }
-  finally { notificationRefreshBusy = false; }
-}
-setInterval(refreshNotificationBadge, 30000);
-document.addEventListener('visibilitychange', () => { tickClock(); refreshNotificationBadge(); });
-window.addEventListener('online', refreshNotificationBadge);

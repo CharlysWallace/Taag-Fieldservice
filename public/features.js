@@ -9,6 +9,8 @@ const dashboardFilters = { month: new Date().toLocaleDateString('en-CA').slice(0
 function ownsReport(o) { return state.role==='TECNICO' && (o.responsavelUsuarioId ? o.responsavelUsuarioId===state.currentUser.id : o.tecnicoId===state.currentUser.tecnicoId); }
 function prepareFeatures() {
   VIEWS.password=screenPassword;
+  VIEWS.tech_avulso=screenAvulso;
+  VIEWS.pending_registration=()=>`<div class="screen"><h1>Cadastro aguardando aprovação</h1><p>Sua solicitação foi enviada. O acesso ao sistema só será liberado após a validação do administrador.</p><button class="btn btn-primary" data-nav="login">Voltar ao login</button></div>`;
   VIEWS.reset_admin=()=>`${topbar('Redefinições de senha')}<div class="screen"><p>Confirme a identidade da pessoa e o protocolo por um contato conhecido antes de aprovar.</p><button class="btn btn-outline" id="loadResets">Atualizar solicitações</button><div id="resetList" aria-live="polite"></div></div>`;
   VIEWS.team_progress=()=>{const o=findOS(state.params.id);return `${topbar('Atendimento da equipe')}<div class="screen"><h2>${escapeHtml(o.cliente.nome)}</h2><p>Equipe: ${escapeHtml(o.tecnicoNome)}</p><p>Responsável: ${escapeHtml(o.responsavelNome)}</p><p>Somente o responsável pelo check-in pode preencher este atendimento.</p><button class="btn btn-primary" id="refreshTeam">Atualizar atendimento</button></div>`;};
   VIEWS.view_dashboard=screenMonthlyDashboard;
@@ -75,6 +77,17 @@ function monthlyPDF() {
 }
 
 function bindFeatures() {
+ const avulso=document.getElementById('avulsoForm');if(avulso)avulso.onsubmit=async e=>{
+  e.preventDefault();const button=avulso.querySelector('[type="submit"]');button.disabled=true;
+  try{const v=id=>document.getElementById(id).value.trim(),chegada=v('avChegada'),saida=v('avSaida');
+   const {os}=await api('/os/avulso',{method:'POST',body:{cliente:{nome:v('avNome'),endereco:v('avEndereco'),telefone:v('avTelefone'),tipoSistema:v('avSistema')},servico:v('avServico'),chegada:new Date(chegada).toISOString(),saida:new Date(saida).toISOString(),data:chegada.slice(0,10),hora:chegada.slice(11,16)}});
+   updateOsCache(os);nav('tech_exec',{id:os.id});
+  }catch(err){document.getElementById('avError').textContent=err.message;button.disabled=false;}
+ };
+ if(state.role==='TECNICO'&&['tech_agenda','settings'].includes(state.view)){
+  const button=document.createElement('button');button.className='btn btn-primary avulso-entry';button.textContent='Relatório sem agendamento';button.onclick=()=>nav('tech_avulso');document.querySelector('#app .screen').prepend(button);
+ }
+
  bindPhotoDescriptions();
  document.getElementById('sessionActions').hidden=!state.currentUser;
  const app=document.getElementById('app');const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
@@ -153,4 +166,10 @@ function bindPhotoDescriptions(){
  document.querySelectorAll('[data-save-photo-description]').forEach(button=>button.onclick=async()=>{
   button.disabled=true;try{await savePhotoDescription(findOS(state.params.id),button.dataset.savePhotoDescription);toast('Descrição da foto salva.');}catch(e){toast(e.message);}finally{button.disabled=false;}
  });
+}
+
+function screenAvulso(){
+ if(state.role!=='TECNICO')return '<div class="screen">Acesso restrito ao técnico.</div>';
+ const fields=[['avNome','Cliente','text',180],['avEndereco','Endereço','text',700],['avTelefone','Telefone (opcional)','tel',80],['avSistema','Tipo do sistema','text',500],['avServico','Serviço prestado','text',300],['avChegada','Data e horário de chegada','datetime-local',40],['avSaida','Data e horário de saída','datetime-local',40]];
+ return `${topbar('Relatório sem agendamento')}<div class="screen"><p>Informe o atendimento realizado. Depois, preencha o relatório, anexe as fotos e colete a assinatura. Os dados do cliente serão registrados somente neste atendimento.</p><form id="avulsoForm" class="card client-form">${fields.map(([id,label,type,max])=>`<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" maxlength="${max}" ${id==='avTelefone'?'':'required'}></div>`).join('')}<p id="avError" role="alert"></p><button class="btn btn-primary" type="submit">Continuar para o relatório</button></form></div>`;
 }

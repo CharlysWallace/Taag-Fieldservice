@@ -122,6 +122,7 @@ router.post('/register', async (req, res) => {
     lida: false,
   }));
 
+  req.session = null;
   res.status(201).json({ ok: true, mensagem: 'Cadastro enviado! Aguarde a aprovação do administrador.' });
 });
 

@@ -474,3 +474,10 @@ input[type=range]{ width:100%; margin-top:18px; accent-color:var(--accent); }
  .dashboard-table{min-width:1100px;}
  #app .screen>.dashboard-entry,#refreshAgenda{width:auto;min-width:220px;}
 }
+
+.topbar{grid-template-columns:auto minmax(0,1fr);}
+.service-preview{margin:8px 0;color:var(--accent);font-size:14px;line-height:1.5;}
+.avulso-entry{margin-bottom:20px;}
+#avulsoForm input[type="datetime-local"]{width:100%;min-width:0;min-height:48px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);font:inherit;color-scheme:dark;}
+#avError{color:var(--danger);}
+@media(min-width:900px){#avulsoForm .field:has(#avServico),#avError,#avulsoForm>button{grid-column:1/-1;}}

@@ -72,6 +72,29 @@ test('equipes, edição única, acesso gerencial, recuperação e exclusões aut
   assert.equal((await req('first','/dashboard')).status,403);
   const dashboard=await req('viewer','/dashboard');assert.equal(dashboard.status,200);assert.equal(dashboard.data.ordens.length,1);assert.equal(dashboard.data.ordens[0].fotos,undefined);assert.equal(dashboard.data.ordens[0].assinatura,undefined);assert.equal(dashboard.data.ordens[0].tecnicoIds.length,2);
  });
+ await t.test('cadastro pendente não ganha sessão nem acesso até aprovação',async()=>{
+  const registration=await request('/auth/register','POST',{nome:'Novo técnico',email:'novo@example.test',senha:password});assert.equal(registration.status,201);
+  assert.equal((await request('/auth/me','GET',undefined,registration.cookie)).status,401);
+  assert.equal((await request('/os','GET',undefined,registration.cookie)).status,401);
+  assert.equal((await request('/auth/login','POST',{email:'novo@example.test',senha:password})).status,401);
+  const pending=(await req('admin','/auth/pending')).data.solicitacoes.find(x=>x.email==='novo@example.test');
+  assert.equal((await req('admin','/auth/pending/'+pending.id+'/approve','POST',{perfil:'TECNICO'})).status,200);
+  assert.equal((await request('/auth/login','POST',{email:'novo@example.test',senha:password})).status,200);
+ });
+ await t.test('relatório avulso usa horários informados e mesmas regras de conclusão',async()=>{
+  const body={cliente:{nome:'Cliente avulso',endereco:'Rua Exemplo',tipoSistema:'Rede'},servico:'Revisão sem agenda',chegada:'2026-09-16T12:00:00.000Z',saida:'2026-09-16T14:30:00.000Z',data:'2026-09-16',hora:'09:00'};
+  for(const role of ['admin','viewer'])assert.equal((await req(role,'/os/avulso','POST',body)).status,403);
+  assert.equal((await request('/os/avulso','POST',body)).status,401);
+  assert.equal((await req('outside','/os/avulso','POST',{...body,saida:'2026-09-15T12:00:00.000Z'})).status,400);
+  const created=await req('outside','/os/avulso','POST',body);assert.equal(created.status,201);
+  const base='/os/'+created.data.os.id;assert.equal(created.data.os.cliente.nome,body.cliente.nome);assert.equal(created.data.os.tipoServicoPersonalizado,body.servico);
+  assert.equal((await req('first',base)).status,403);
+  assert.equal((await req('outside',base+'/checkout','POST',report)).status,400);
+  for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req('outside',base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
+  const done=await req('outside',base+'/checkout','POST',report);assert.equal(done.status,200);assert.equal(done.data.os.checkin.timestamp,body.chegada);assert.equal(done.data.os.checkout.timestamp,body.saida);
+  assert.equal((await req('admin','/clientes')).data.clientes.some(c=>c.nome===body.cliente.nome),false);
+  assert.equal((await req('admin',base,'DELETE')).status,200);
+ });
  await t.test('pedido exige aprovação + token, uso único invalida sessões antigas',async()=>{
   const reset=(await request('/password/request','POST',{email:'first@example.test'})).data;
   assert.equal((await request('/password/complete','POST',{...reset,novaSenha:'Replacement-567'})).status,403);

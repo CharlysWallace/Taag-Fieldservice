@@ -25,6 +25,20 @@ const wrap = fn => async(req,res,next)=>{try{await fn(req,res);}catch(err){if(er
 router.use(requireAuth,requireRole('ADMIN','TECNICO'));
 router.get('/',wrap(async(req,res)=>{let all=await readCollection('ordens_servico');if(req.session.perfil==='TECNICO')all=all.filter(o=>team(o).includes(req.session.tecnicoId));res.json({ordens:await Promise.all(all.map(related))});}));
 router.get('/:id',wrap(async(req,res)=>{const o=find(await readCollection('ordens_servico'),req.params.id);assigned(o,req);res.json({os:await related(o)});}));
+router.post('/avulso',requireRole('TECNICO'),wrap(async(req,res)=>{
+  const b=req.body||{},cliente={};
+  for(const [key,max] of Object.entries({nome:180,endereco:700,telefone:80,tipoSistema:500})){
+    const v=b.cliente?.[key]??'';if(typeof v!=='string'||v.length>max)fail(400,'Dados do cliente inválidos.');cliente[key]=v.trim();
+  }
+  if(!cliente.nome||!cliente.endereco||!cliente.tipoSistema)fail(400,'Informe cliente, endereço e sistema.');
+  if(typeof b.servico!=='string'||!b.servico.trim()||b.servico.length>300)fail(400,'Informe o serviço em até 300 caracteres.');
+  const dates=[b.chegada,b.saida];
+  if(dates.some(v=>typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)||!Number.isFinite(Date.parse(v))))fail(400,'Informe horários válidos.');
+  if(Date.parse(b.saida)<Date.parse(b.chegada))fail(400,'A saída não pode ser anterior à chegada.');
+  if(typeof b.data!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(b.data)||typeof b.hora!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(b.hora))fail(400,'Data ou horário inválido.');
+  const os={id:genId('os'),origem:'AVULSO',clienteId:null,clienteSnapshot:cliente,tecnicoId:req.session.tecnicoId,tecnicoIds:[req.session.tecnicoId],responsavelUsuarioId:req.session.userId,responsavelTecnicoId:req.session.tecnicoId,tipoServico:'PERSONALIZADO',tipoServicoPersonalizado:b.servico.trim(),data:b.data,hora:b.hora,status:'EM_ANDAMENTO',descricao:'',camposServico:{sistemaCliente:cliente.tipoSistema},fotos:[],assinatura:null,checkin:{timestamp:b.chegada,manual:true},saidaInformada:b.saida,checkout:null,edicoesRelatorio:0};
+  await mutateCollection('ordens_servico',items=>items.push(os));res.status(201).json({os:await related(os)});
+}));
 router.post('/',requireRole('ADMIN'),wrap(async(req,res)=>{
   const {clienteId,tipoServico,tipoServicoPersonalizado,data,hora}=req.body || {};
   const tecnicoIds=req.body.tecnicoIds || [req.body.tecnicoId];
@@ -51,7 +65,7 @@ router.post('/:id/checkout',requireRole('TECNICO'),wrap(async(req,res)=>{
   reportBody(req.body || {});let os;
   await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Esta OS precisa estar em andamento para ser concluída.');
     const cats=(os.fotos || []).map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Anexe uma foto antes e uma depois do serviço.');
-    os.status='CONCLUIDO';os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura;os.checkout={timestamp:new Date().toISOString()};os.edicoesRelatorio=0;
+    os.status='CONCLUIDO';os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura;os.checkout={timestamp:os.origem==='AVULSO'?os.saidaInformada:new Date().toISOString(),manual:os.origem==='AVULSO'};os.edicoesRelatorio=0;
   });res.json({os:await related(os)});
 }));
 router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
