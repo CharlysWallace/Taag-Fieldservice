@@ -165,3 +165,9 @@ A cada novo push para a branch configurada, o Render pode fazer novo deploy auto
 - Na aba de cadastro de clientes, o administrador pode excluir um cliente. Os dados históricos das OS existentes são preservados; o cliente deixa de estar disponível para novas OS.
 - O técnico responsável pode remover fotos durante o atendimento. Após a conclusão, a remoção é feita na edição única, com nova assinatura e mantendo as fotos obrigatórias de antes e depois.
 - O agente de IA e seus acessos foram removidos. O aplicativo não utiliza mais a API OpenAI.
+
+## Relatórios sem agendamento
+
+O técnico acessa “Relatório sem agendamento” pela agenda ou configurações, informa cliente, serviço e datas/horários de chegada e saída. O atendimento fica em andamento para anexar evidências e coletar assinatura. Após concluir, aparece no histórico e dashboard com os horários informados. Os dados do cliente ficam no atendimento e não criam um cadastro geral. As mesmas regras de autoria, fotos obrigatórias e edição única se aplicam.
+
+A interface não exibe indicadores de bateria, rede ou horário, nem sino ou aba de notificações. As confirmações e mensagens de erro das ações permanecem disponíveis. Cadastros novos aguardam aprovação em uma tela própria e não têm acesso aos dados internos antes da aprovação.
