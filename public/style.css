@@ -481,3 +481,17 @@ input[type=range]{ width:100%; margin-top:18px; accent-color:var(--accent); }
 #avulsoForm input[type="datetime-local"]{width:100%;min-width:0;min-height:48px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);font:inherit;color-scheme:dark;}
 #avError{color:var(--danger);}
 @media(min-width:900px){#avulsoForm .field:has(#avServico),#avError,#avulsoForm>button{grid-column:1/-1;}}
+
+/* Padronização dos acessos e alinhamento das ações principais. */
+#app .avulso-entry{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;padding:12px 16px;border-radius:12px;font-size:15px;font-weight:700;margin:0 0 20px;text-align:center;}
+.admin-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%;max-width:1280px;margin:0 auto;padding:0 16px 20px;}
+.admin-tabs .settings-tab{display:flex;align-items:center;justify-content:center;min-height:48px;padding:12px;border-radius:12px;font-size:14px;font-weight:700;white-space:normal;text-align:center;border-color:var(--accent);color:var(--accent);}
+.admin-tabs .settings-tab.active{color:var(--accent-ink);}
+.session-actions{align-items:center;justify-content:center;}
+.session-secondary,#fixedNewOS{width:100%;max-width:360px;}
+@media(min-width:900px){
+ .admin-tabs{padding:0 32px 24px;}
+ #app .avulso-entry{max-width:360px;margin-left:auto;margin-right:auto;}
+ .session-actions{justify-content:center;}
+ .session-secondary,#fixedNewOS{width:260px;}
+}
