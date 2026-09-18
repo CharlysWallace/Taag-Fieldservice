@@ -91,9 +91,18 @@ test('equipes, edição única, acesso gerencial, recuperação e exclusões aut
   assert.equal((await req('first',base)).status,403);
   assert.equal((await req('outside',base+'/checkout','POST',report)).status,400);
   for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req('outside',base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
-  const done=await req('outside',base+'/checkout','POST',report);assert.equal(done.status,200);assert.equal(done.data.os.checkin.timestamp,body.chegada);assert.equal(done.data.os.checkout.timestamp,body.saida);
+  const done=await req('outside',base+'/checkout','POST',{...report,assinatura:null});assert.equal(done.data.os.assinatura,null);assert.equal(done.status,200);assert.equal(done.data.os.checkin.timestamp,body.chegada);assert.equal(done.data.os.checkout.timestamp,body.saida);
   assert.equal((await req('admin','/clientes')).data.clientes.some(c=>c.nome===body.cliente.nome),false);
   assert.equal((await req('admin',base,'DELETE')).status,200);
+ });
+ await t.test('OS agendada conclui sem assinatura e aceita assinatura apenas válida',async()=>{
+  const created=await req('admin','/os','POST',{clienteId:'c1',tecnicoIds:['t3'],tipoServico:'SUPORTE',data:'2026-09-18',hora:'10:00'});
+  const base='/os/'+created.data.os.id;await req('outside',base+'/checkin','POST');
+  for(const categoria of ['ANTES','DEPOIS'])await req('outside',base+'/fotos','POST',{categoria,dataUrl:image});
+  assert.equal((await req('outside',base+'/checkout','POST',{...report,assinatura:'inválida'})).status,400);
+  const completed=await req('outside',base+'/checkout','POST',{descricao:'Feito',camposServico:{}});assert.equal(completed.status,200);assert.equal(completed.data.os.assinatura,null);
+  const revised=await req('outside',base+'/report','PATCH',{descricao:'Corrigido',camposServico:{},assinatura:null});assert.equal(revised.status,200);assert.equal(revised.data.os.assinatura,null);
+  await req('admin',base,'DELETE');
  });
  await t.test('pedido exige aprovação + token, uso único invalida sessões antigas',async()=>{
   const reset=(await request('/password/request','POST',{email:'first@example.test'})).data;

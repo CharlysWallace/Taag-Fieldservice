@@ -384,7 +384,7 @@ function screenTechExec(){
     <div class="section-label">Evidências do serviço</div><div class="photo-category"><label>Categoria da foto</label><select id="photoCategory"><option value="ANTES">📷 Antes do serviço</option><option value="DURANTE">📷 Durante o serviço</option><option value="DEPOIS">📷 Após a conclusão</option><option value="EQUIPAMENTOS">📷 Equipamentos utilizados</option></select></div><label class="photo-add">📷 Toque para anexar foto (câmera ou galeria)<input type="file" accept="image/*" id="photoInput" style="display:none;"></label>
     ${photoGallery(o,true)}
 
-    <button class="btn btn-primary" style="margin-top:22px;" id="toSignBtn">Finalizar e coletar assinatura</button>
+    <button class="btn btn-primary" style="margin-top:22px;" id="toSignBtn">Finalizar relatório</button>
   </div>`;
 }
 
@@ -393,11 +393,11 @@ function screenTechSignature(){
   return `
   ${topbar('Check-out')}
   <div class="screen">
-    <div class="section-label">Assinatura do cliente</div>
+    <div class="section-label">Assinatura do cliente (opcional)</div>
     <div class="sig-pad-wrap"><canvas id="sigCanvas"></canvas></div>
-    <div class="sig-caption">Peça para o cliente assinar com o dedo na tela</div>
+    <div class="sig-caption">Se desejar, peça para o cliente assinar. Você também pode concluir sem assinatura.</div>
     <button class="btn btn-ghost small" id="clearSigBtn" style="margin-top:10px;">Limpar assinatura</button>
-    <button class="btn btn-primary" style="margin-top:18px;" id="finishBtn" disabled>Concluir atendimento</button>
+    <button class="btn btn-primary" style="margin-top:18px;" id="finishBtn">Concluir atendimento</button>
   </div>`;
 }
 
@@ -422,8 +422,7 @@ function screenTechReport(){
     <div class="section-label">Descrição</div>
     <div class="card" style="font-size:13.5px; line-height:1.5;">${escapeHtml(o.descricao || '—')}</div>
     ${photoGallery(o)}
-    <div class="section-label">Assinatura</div>
-    <div class="sig-pad-wrap" style="padding:8px;"><img src="${o.assinatura}" style="width:100%; display:block;"></div>
+    ${o.assinatura ? `<div class="section-label">Assinatura</div><div class="sig-pad-wrap" style="padding:8px;"><img src="${escapeHtml(o.assinatura)}" alt="Assinatura do cliente" style="width:100%; display:block;"></div>` : ''}
 
     <button class="btn btn-primary" style="margin-top:20px;" id="pdfBtn">⬇ Baixar relatório em PDF</button>
     <button class="btn btn-ghost" style="margin-top:10px;" data-nav="tech_agenda">Voltar à agenda</button>
@@ -523,8 +522,7 @@ function screenAdminDetail(){
     <div class="section-label">Descrição</div>
     <div class="card" style="font-size:13.5px; line-height:1.5;">${escapeHtml(o.descricao || '—')}</div>
     ${photoGallery(o)}
-    <div class="section-label">Assinatura</div>
-    <div class="sig-pad-wrap" style="padding:8px;"><img src="${o.assinatura}" style="width:100%; display:block;"></div>
+    ${o.assinatura ? `<div class="section-label">Assinatura</div><div class="sig-pad-wrap" style="padding:8px;"><img src="${escapeHtml(o.assinatura)}" alt="Assinatura do cliente" style="width:100%; display:block;"></div>` : ''}
 
     <button class="btn btn-primary" style="margin-top:20px;" id="pdfBtnAdmin">⬇ Baixar relatório em PDF</button>
     <button class="btn btn-outline" style="margin-top:10px;" id="sendClientBtn">✉ Enviar relatório ao cliente</button>
@@ -1189,15 +1187,14 @@ function setupSignaturePad(canvas, osId){
 
   document.getElementById('clearSigBtn').onclick = ()=>{
     ctx.clearRect(0,0,canvas.width,canvas.height); has=false;
-    document.getElementById('finishBtn').disabled = true;
+    document.getElementById('finishBtn').disabled = false;
   };
   document.getElementById('finishBtn').onclick = async ()=>{
-    if(!has) return;
     const finishBtn = document.getElementById('finishBtn');
     finishBtn.disabled = true; finishBtn.textContent = 'Concluindo…';
     try{
       const o = findOS(osId);
-      const assinaturaDataUrl = canvas.toDataURL('image/png');
+      const assinaturaDataUrl = has ? canvas.toDataURL('image/png') : null;
       const body = { descricao: o.descricao || '', camposServico: o.camposServico || {}, assinatura: assinaturaDataUrl };
       const { os } = reportDraft ? await api('/os/'+encodeURIComponent(osId)+'/report', {method:'PATCH', body:{...body,fotos:o.fotos.map(f=>(OS_LIST.find(item=>item.id===osId)?.fotos||[]).some(saved=>saved.id===f.id&&saved.src===f.src)?{id:f.id,categoria:f.categoria,descricao:f.descricao||''}:{categoria:f.categoria,src:f.src,descricao:f.descricao||''})}}) : await apiCheckout(osId, body);
       reportDraft = null;
