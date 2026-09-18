@@ -10,8 +10,10 @@ function buildTaagReport(jsPDF, o, logo) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
     doc.text(['Contato: Charlys Wallace Vieira de Carvalho', 'Empresa: Taag', 'Telefone: 11 93353-9384', 'Email: Programacao05@taagbrasil.com.br'], 65, 13);
     doc.setDrawColor(30); doc.line(margin, 31, 192, 31);
-    doc.setFontSize(11); doc.text('RELATÓRIO DE ATENDIMENTO   O.S.: ' + o.id.slice(-6), margin, 38);
-    y = 46;
+    doc.setFontSize(11); doc.text('RELATÓRIO DE ATENDIMENTO', margin, 38);
+    const identification = doc.splitTextToSize('O.S.: ' + text(o.cliente.nome), width);
+    doc.text(identification, margin, 44);
+    y = 49 + identification.length * 5;
   }
   function nextPage() { doc.addPage(); header(); }
   function lines(value, bold = false) {
