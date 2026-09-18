@@ -171,3 +171,5 @@ A cada novo push para a branch configurada, o Render pode fazer novo deploy auto
 O técnico acessa “Relatório sem agendamento” pela agenda ou configurações, informa cliente, serviço e datas/horários de chegada e saída. O atendimento fica em andamento para anexar evidências e coletar assinatura. Após concluir, aparece no histórico e dashboard com os horários informados. Os dados do cliente ficam no atendimento e não criam um cadastro geral. As mesmas regras de autoria, fotos obrigatórias e edição única se aplicam.
 
 A interface não exibe indicadores de bateria, rede ou horário, nem sino ou aba de notificações. As confirmações e mensagens de erro das ações permanecem disponíveis. Cadastros novos aguardam aprovação em uma tela própria e não têm acesso aos dados internos antes da aprovação.
+
+A assinatura do cliente é opcional nos relatórios agendados e sem agendamento, inclusive na edição única. Sem assinatura, a seção não aparece na consulta nem no PDF.

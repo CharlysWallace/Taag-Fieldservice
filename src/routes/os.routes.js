@@ -10,7 +10,7 @@ function validPhotoDescription(value) { return value===undefined || (typeof valu
 function reportBody(body) {
   if (typeof body.descricao !== 'string' || body.descricao.length > 30000) fail(400,'Descrição inválida (até 30.000 caracteres).');
   if (!body.camposServico || typeof body.camposServico !== 'object' || Array.isArray(body.camposServico) || Object.keys(body.camposServico).length > 30 || Object.values(body.camposServico).some(v=>typeof v !== 'string' || v.length > 4000)) fail(400,'Campos do relatório inválidos.');
-  if (!imageOK(body.assinatura)) fail(400,'Registre a assinatura do cliente.');
+  if (body.assinatura != null && body.assinatura !== '' && !imageOK(body.assinatura)) fail(400,'Assinatura inválida.');
 }
 function assigned(o,req) { if (req.session.perfil==='TECNICO' && !team(o).includes(req.session.tecnicoId)) fail(403,'Esta ordem de serviço não pertence à sua equipe.'); }
 function responsible(o,req) { assigned(o,req); if (o.responsavelUsuarioId ? o.responsavelUsuarioId !== req.session.userId : o.tecnicoId !== req.session.tecnicoId) fail(403,'Somente o técnico que fez o check-in pode preencher ou editar o relatório.'); }
@@ -65,7 +65,7 @@ router.post('/:id/checkout',requireRole('TECNICO'),wrap(async(req,res)=>{
   reportBody(req.body || {});let os;
   await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Esta OS precisa estar em andamento para ser concluída.');
     const cats=(os.fotos || []).map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Anexe uma foto antes e uma depois do serviço.');
-    os.status='CONCLUIDO';os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura;os.checkout={timestamp:os.origem==='AVULSO'?os.saidaInformada:new Date().toISOString(),manual:os.origem==='AVULSO'};os.edicoesRelatorio=0;
+    os.status='CONCLUIDO';os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura || null;os.checkout={timestamp:os.origem==='AVULSO'?os.saidaInformada:new Date().toISOString(),manual:os.origem==='AVULSO'};os.edicoesRelatorio=0;
   });res.json({os:await related(os)});
 }));
 router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
@@ -73,7 +73,7 @@ router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
   if(req.body.fotos!==undefined && (!Array.isArray(req.body.fotos) || req.body.fotos.some(f=>!f || !categories.includes(f.categoria) || !validPhotoDescription(f.descricao) || (f.src!==undefined ? !imageOK(f.src) : typeof f.id!=='string'))))fail(400,'Fotos inválidas.');
   await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='CONCLUIDO' || (os.edicoesRelatorio || 0)>=1)fail(409,'A única edição deste relatório já foi utilizada ou ele ainda não foi concluído.');
     if(req.body.fotos){const cats=req.body.fotos.map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Mantenha ao menos uma foto antes e uma depois.');os.fotos=req.body.fotos.map(f=>{if(f.src===undefined){const saved=(os.fotos||[]).find(photo=>photo.id===f.id);if(!saved)fail(400,'Foto original não encontrada.');return {...saved,categoria:f.categoria,descricao:f.descricao ?? saved.descricao ?? ''};}return {id:genId('foto'),categoria:f.categoria,src:f.src,descricao:f.descricao || '',criadoEm:new Date().toISOString()};});}
-    os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura;os.edicoesRelatorio=1;os.editadoEm=new Date().toISOString();os.editadoPor=req.session.userId;
+    os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura || null;os.edicoesRelatorio=1;os.editadoEm=new Date().toISOString();os.editadoPor=req.session.userId;
   });res.json({os:await related(os)});
 }));
 router.post('/:id/fotos',requireRole('TECNICO'),wrap(async(req,res)=>{

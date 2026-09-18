@@ -105,7 +105,7 @@ function bindFeatures() {
   btn.onclick=()=>{reportDraft=structuredClone(o);nav('tech_exec',{id:o.id});};
  }
  if(reportDraft && state.view==='tech_exec'){
-  app.querySelector('.screen').insertAdjacentHTML('afterbegin','<p class="card">Você pode salvar uma única edição. Corrija os dados e recolha a assinatura para confirmar.</p><button class="btn btn-ghost" id="cancelEdit">Cancelar edição</button>');
+  app.querySelector('.screen').insertAdjacentHTML('afterbegin','<p class="card">Você pode salvar uma única edição. Corrija os dados e, se desejar, inclua a assinatura do cliente.</p><button class="btn btn-ghost" id="cancelEdit">Cancelar edição</button>');
   on('cancelEdit',()=>{const id=reportDraft.id;reportDraft=null;nav('tech_report',{id});});
  }
  if(reportDraft&&state.view==='tech_signature')document.getElementById('finishBtn').textContent='Salvar única edição';
@@ -171,5 +171,5 @@ function bindPhotoDescriptions(){
 function screenAvulso(){
  if(state.role!=='TECNICO')return '<div class="screen">Acesso restrito ao técnico.</div>';
  const fields=[['avNome','Cliente','text',180],['avEndereco','Endereço','text',700],['avTelefone','Telefone (opcional)','tel',80],['avSistema','Tipo do sistema','text',500],['avServico','Serviço prestado','text',300],['avChegada','Data e horário de chegada','datetime-local',40],['avSaida','Data e horário de saída','datetime-local',40]];
- return `${topbar('Relatório sem agendamento')}<div class="screen"><p>Informe o atendimento realizado. Depois, preencha o relatório, anexe as fotos e colete a assinatura. Os dados do cliente serão registrados somente neste atendimento.</p><form id="avulsoForm" class="card client-form">${fields.map(([id,label,type,max])=>`<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" maxlength="${max}" ${id==='avTelefone'?'':'required'}></div>`).join('')}<p id="avError" role="alert"></p><button class="btn btn-primary" type="submit">Continuar para o relatório</button></form></div>`;
+ return `${topbar('Relatório sem agendamento')}<div class="screen"><p>Informe o atendimento realizado. Depois, preencha o relatório, anexe as fotos e finalize; a assinatura é opcional. Os dados do cliente serão registrados somente neste atendimento.</p><form id="avulsoForm" class="card client-form">${fields.map(([id,label,type,max])=>`<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" maxlength="${max}" ${id==='avTelefone'?'':'required'}></div>`).join('')}<p id="avError" role="alert"></p><button class="btn btn-primary" type="submit">Continuar para o relatório</button></form></div>`;
 }
