@@ -38,7 +38,7 @@ function screenMonthlyDashboard() {
 }
 function filteredDashboard() { return (dashboardData|| (state.role==='VISUALIZADOR'?OS_LIST:[])).filter(o=>o.data?.startsWith(dashboardFilters.month) && o.cliente.nome.toLocaleLowerCase().includes(dashboardFilters.client.toLocaleLowerCase()) && (!dashboardFilters.tech||o.tecnicoIds.includes(dashboardFilters.tech)) && (!dashboardFilters.status||o.status===dashboardFilters.status)); }
 const MONTHLY_HEADERS=['OS','Data','Cliente','Equipe atribuída','Responsável pelo check-in','Status','Serviço','Motivo','Pendências','Duração (min)'];
-function monthlyColumns(o) { return [o.id,o.data,o.cliente.nome,o.tecnicoNome,o.responsavelNome,statusLabel(o.status),o.tipoServico==='PERSONALIZADO'?o.tipoServicoPersonalizado:serviceLabel(o.tipoServico).replace(/^[^\p{L}\p{N}]+/u,''),o.motivo,o.pendencias,o.minutos??'']; }
+function monthlyColumns(o) { return [o.cliente.nome,o.data,o.cliente.nome,o.tecnicoNome,o.responsavelNome,statusLabel(o.status),o.tipoServico==='PERSONALIZADO'?o.tipoServicoPersonalizado:serviceLabel(o.tipoServico).replace(/^[^\p{L}\p{N}]+/u,''),o.motivo,o.pendencias,o.minutos??'']; }
 function monthlyCSV() {
  const table=[['OS','Data','Cliente','Equipe atribuída','Responsável pelo check-in','Status','Serviço','Motivo','Pendências','Duração (minutos)'],...filteredDashboard().map(monthlyColumns)];
  const value=v=>'"'+String(v).replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"';

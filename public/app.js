@@ -409,7 +409,7 @@ function screenTechReport(){
   <div class="screen">
     <div class="report-header">
       <div class="stamp">✓ Atendimento concluído</div>
-      <div style="font-size:13px; color:var(--text-muted);">OS #${o.id.slice(-6)}</div>
+      <div style="font-size:13px; color:var(--text-muted);">OS: ${escapeHtml(o.cliente.nome)}</div>
     </div>
     <div class="card">
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
@@ -507,7 +507,7 @@ function screenAdminDetail(){
   <div class="screen">
     <div class="report-header">
       <div class="stamp">✓ Atendimento concluído</div>
-      <div style="font-size:13px; color:var(--text-muted);">OS #${o.id.slice(-6)}</div>
+      <div style="font-size:13px; color:var(--text-muted);">OS: ${escapeHtml(o.cliente.nome)}</div>
     </div>
     <div class="card">
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
@@ -1214,7 +1214,7 @@ async function gerarPDF(o){
   try {
     const logo = await fetch(LOGO_SRC).then(res => { if (!res.ok) throw new Error('Logo indisponível'); return res.blob(); }).then(blob => new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); }));
     const doc = buildTaagReport(window.jspdf.jsPDF, o, logo);
-    doc.save('relatorio_' + o.cliente.nome.replace(/\s+/g,'_') + '_' + o.id.slice(-6) + '.pdf');
+    doc.save('relatorio_' + o.cliente.nome.replace(/\s+/g,'_') + '.pdf');
   } catch (err) { toast('Não foi possível gerar o relatório: ' + err.message); }
 }
 
