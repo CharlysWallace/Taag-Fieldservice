@@ -77,6 +77,15 @@ function monthlyPDF() {
 }
 
 function bindFeatures() {
+ if(['tech_report','admin_detail','view_detail'].includes(state.view)){
+  const o=findOS(state.params.id);
+  if(o?.status==='CONCLUIDO'&&o.editadoEm){
+   const info=document.createElement('p');info.className='card report-edit-info';
+   info.textContent='Última edição: '+new Date(o.editadoEm).toLocaleString('pt-BR')+' · Edições realizadas: '+(o.edicoesRelatorio||0);
+   document.querySelector('#app .screen')?.append(info);
+  }
+ }
+
  const avulso=document.getElementById('avulsoForm');if(avulso)avulso.onsubmit=async e=>{
   e.preventDefault();const button=avulso.querySelector('[type="submit"]');button.disabled=true;
   try{const v=id=>document.getElementById(id).value.trim(),chegada=v('avChegada'),saida=v('avSaida');

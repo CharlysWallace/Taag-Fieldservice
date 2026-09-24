@@ -34,7 +34,6 @@ function buildTaagReport(jsPDF, o, logo) {
   lines('Endereço: ' + text(o.cliente.endereco));
   lines('Equipe atribuída: ' + text(o.tecnicoNome));
   lines('Responsável pelo atendimento: ' + text(o.responsavelNome || o.tecnicoNome));
-  if(o.editadoEm) lines('Relatório revisado (edição única): ' + new Date(o.editadoEm).toLocaleString('pt-BR'));
   if (o.tipoServicoPersonalizado) lines('Tipo de serviço: ' + o.tipoServicoPersonalizado); y += 3;
   section('TIPO DE SISTEMA DO CLIENTE', c.sistemaCliente);
   section('MOTIVO DO ATENDIMENTO', c.motivo);
