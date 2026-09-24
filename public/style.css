@@ -495,3 +495,6 @@ input[type=range]{ width:100%; margin-top:18px; accent-color:var(--accent); }
  .session-actions{justify-content:center;}
  .session-secondary,#fixedNewOS{width:260px;}
 }
+
+.avulso-team{grid-column:1/-1;min-width:0;border:1px solid var(--border);border-radius:12px;padding:16px;margin:8px 0;}
+.avulso-team legend{font-weight:700;color:var(--accent);padding:0 8px;}

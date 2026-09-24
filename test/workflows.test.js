@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {spawn}=require('node:child_process');const net=require('node:net');
 const {hashPassword}=require('../src/auth/hash');
-test('equipes, edição única, acesso gerencial, recuperação e exclusões autorizadas',async t=>{
+test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusões autorizadas',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'taag-workflows-'));
  const save=(name,data)=>fs.writeFileSync(path.join(dir,name+'.json'),JSON.stringify(data));
  const password='Only-test-4381';
@@ -33,7 +33,7 @@ test('equipes, edição única, acesso gerencial, recuperação e exclusões aut
  });
  const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
  const report={descricao:'Serviço realizado',camposServico:{motivo:'Ajuste da rede',pendencias:'Não'},assinatura:image};
- await t.test('somente autor conclui e salva exatamente uma revisão',async()=>{
+ await t.test('somente autor conclui e salva várias revisões',async()=>{
   const base='/os/'+t.osId;
   assert.equal((await req(t.other,base+'/fotos','POST',{categoria:'ANTES',dataUrl:image})).status,403);
   assert.equal((await req(t.owner,base+'/checkout','POST',report)).status,400);
@@ -60,11 +60,12 @@ test('equipes, edição única, acesso gerencial, recuperação e exclusões aut
   assert.equal((await req(t.owner,base+'/report','PATCH',{...report,fotos:[{id:'invalid',categoria:'ANTES'},{id:'invalid',categoria:'DEPOIS'}]})).status,400);
   assert.equal((await req(t.owner,base+'/report','PATCH',{...report,fotos:photos.map(f=>({...f,descricao:'a'.repeat(1001)}))})).status,400);
   report.fotos=photos.map(f=>({...f,descricao:'Descrição revisada'}));
-  const edits=await Promise.all([req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão A'}),req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão B'})]);assert.deepEqual(edits.map(r=>r.status).sort(),[200,409]);
+  const edits=await Promise.all([req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão A'}),req(t.owner,base+'/report','PATCH',{...report,descricao:'Revisão B'})]);assert.deepEqual(edits.map(r=>r.status).sort(),[200,200]);
+  assert.equal((await req(t.owner,base+'/report','PATCH',report)).status,200);
   assert.equal((await req(t.owner,base+'/fotos','POST',{categoria:'ANTES',dataUrl:image})).status,409);
   assert.equal((await req(t.owner,base,'DELETE')).status,403);
   assert.equal((await req(t.owner,captionRoute,'DELETE')).status,409);
-  assert.equal((await req(t.owner,base)).data.os.edicoesRelatorio,1);
+  assert.equal((await req(t.owner,base)).data.os.edicoesRelatorio,3);
   assert.equal((await req(t.owner,base)).data.os.fotos[0].descricao,'Descrição revisada');
  });
  await t.test('perfil gerencial recebe só dados do dashboard',async()=>{
@@ -82,16 +83,22 @@ test('equipes, edição única, acesso gerencial, recuperação e exclusões aut
   assert.equal((await request('/auth/login','POST',{email:'novo@example.test',senha:password})).status,200);
  });
  await t.test('relatório avulso usa horários informados e mesmas regras de conclusão',async()=>{
-  const body={cliente:{nome:'Cliente avulso',endereco:'Rua Exemplo',tipoSistema:'Rede'},servico:'Revisão sem agenda',chegada:'2026-09-16T12:00:00.000Z',saida:'2026-09-16T14:30:00.000Z',data:'2026-09-16',hora:'09:00'};
+  const body={tecnicoIds:['t3','t2'],cliente:{nome:'Cliente avulso',endereco:'Rua Exemplo',tipoSistema:'Rede'},servico:'Revisão sem agenda',chegada:'2026-09-16T12:00:00.000Z',saida:'2026-09-16T14:30:00.000Z',data:'2026-09-16',hora:'09:00'};
   for(const role of ['admin','viewer'])assert.equal((await req(role,'/os/avulso','POST',body)).status,403);
   assert.equal((await request('/os/avulso','POST',body)).status,401);
   assert.equal((await req('outside','/os/avulso','POST',{...body,saida:'2026-09-15T12:00:00.000Z'})).status,400);
+  for(const tecnicoIds of [[],['t2'],['t3','t3'],['t3','missing']])assert.equal((await req('outside','/os/avulso','POST',{...body,tecnicoIds})).status,400);
   const created=await req('outside','/os/avulso','POST',body);assert.equal(created.status,201);
   const base='/os/'+created.data.os.id;assert.equal(created.data.os.cliente.nome,body.cliente.nome);assert.equal(created.data.os.tipoServicoPersonalizado,body.servico);
   assert.equal((await req('first',base)).status,403);
+  assert.equal((await req('second',base)).status,200);
+  assert.equal((await req('second','/os')).data.ordens.some(o=>o.id===created.data.os.id),true);
+  assert.equal((await req('second',base+'/checkout','POST',report)).status,403);
   assert.equal((await req('outside',base+'/checkout','POST',report)).status,400);
   for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req('outside',base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
   const done=await req('outside',base+'/checkout','POST',{...report,assinatura:null});assert.equal(done.data.os.assinatura,null);assert.equal(done.status,200);assert.equal(done.data.os.checkin.timestamp,body.chegada);assert.equal(done.data.os.checkout.timestamp,body.saida);
+  assert.equal((await req('second',base+'/report','PATCH',report)).status,403);
+  for(let i=0;i<3;i++)assert.equal((await req('outside',base+'/report','PATCH',{descricao:'Revisão '+i,camposServico:{},assinatura:null})).status,200);
   assert.equal((await req('admin','/clientes')).data.clientes.some(c=>c.nome===body.cliente.nome),false);
   assert.equal((await req('admin',base,'DELETE')).status,200);
  });

@@ -27,6 +27,9 @@ router.get('/',wrap(async(req,res)=>{let all=await readCollection('ordens_servic
 router.get('/:id',wrap(async(req,res)=>{const o=find(await readCollection('ordens_servico'),req.params.id);assigned(o,req);res.json({os:await related(o)});}));
 router.post('/avulso',requireRole('TECNICO'),wrap(async(req,res)=>{
   const b=req.body||{},cliente={};
+  const tecnicoIds=b.tecnicoIds ?? [req.session.tecnicoId];
+  const tecnicos=await readCollection('tecnicos');
+  if(!Array.isArray(tecnicoIds)||!tecnicoIds.length||tecnicoIds.length>20||new Set(tecnicoIds).size!==tecnicoIds.length||tecnicoIds.some(id=>!tecnicos.some(t=>t.id===id))||!tecnicoIds.includes(req.session.tecnicoId))fail(400,'Selecione técnicos válidos, incluindo você, sem repetição.');
   for(const [key,max] of Object.entries({nome:180,endereco:700,telefone:80,tipoSistema:500})){
     const v=b.cliente?.[key]??'';if(typeof v!=='string'||v.length>max)fail(400,'Dados do cliente inválidos.');cliente[key]=v.trim();
   }
@@ -36,7 +39,7 @@ router.post('/avulso',requireRole('TECNICO'),wrap(async(req,res)=>{
   if(dates.some(v=>typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)||!Number.isFinite(Date.parse(v))))fail(400,'Informe horários válidos.');
   if(Date.parse(b.saida)<Date.parse(b.chegada))fail(400,'A saída não pode ser anterior à chegada.');
   if(typeof b.data!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(b.data)||typeof b.hora!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(b.hora))fail(400,'Data ou horário inválido.');
-  const os={id:genId('os'),origem:'AVULSO',clienteId:null,clienteSnapshot:cliente,tecnicoId:req.session.tecnicoId,tecnicoIds:[req.session.tecnicoId],responsavelUsuarioId:req.session.userId,responsavelTecnicoId:req.session.tecnicoId,tipoServico:'PERSONALIZADO',tipoServicoPersonalizado:b.servico.trim(),data:b.data,hora:b.hora,status:'EM_ANDAMENTO',descricao:'',camposServico:{sistemaCliente:cliente.tipoSistema},fotos:[],assinatura:null,checkin:{timestamp:b.chegada,manual:true},saidaInformada:b.saida,checkout:null,edicoesRelatorio:0};
+  const os={id:genId('os'),origem:'AVULSO',clienteId:null,clienteSnapshot:cliente,tecnicoId:req.session.tecnicoId,tecnicoIds,responsavelUsuarioId:req.session.userId,responsavelTecnicoId:req.session.tecnicoId,tipoServico:'PERSONALIZADO',tipoServicoPersonalizado:b.servico.trim(),data:b.data,hora:b.hora,status:'EM_ANDAMENTO',descricao:'',camposServico:{sistemaCliente:cliente.tipoSistema},fotos:[],assinatura:null,checkin:{timestamp:b.chegada,manual:true},saidaInformada:b.saida,checkout:null,edicoesRelatorio:0};
   await mutateCollection('ordens_servico',items=>items.push(os));res.status(201).json({os:await related(os)});
 }));
 router.post('/',requireRole('ADMIN'),wrap(async(req,res)=>{
@@ -71,20 +74,20 @@ router.post('/:id/checkout',requireRole('TECNICO'),wrap(async(req,res)=>{
 router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
   reportBody(req.body || {});let os;
   if(req.body.fotos!==undefined && (!Array.isArray(req.body.fotos) || req.body.fotos.some(f=>!f || !categories.includes(f.categoria) || !validPhotoDescription(f.descricao) || (f.src!==undefined ? !imageOK(f.src) : typeof f.id!=='string'))))fail(400,'Fotos inválidas.');
-  await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='CONCLUIDO' || (os.edicoesRelatorio || 0)>=1)fail(409,'A única edição deste relatório já foi utilizada ou ele ainda não foi concluído.');
+  await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='CONCLUIDO')fail(409,'Conclua o atendimento antes de editar o relatório.');
     if(req.body.fotos){const cats=req.body.fotos.map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Mantenha ao menos uma foto antes e uma depois.');os.fotos=req.body.fotos.map(f=>{if(f.src===undefined){const saved=(os.fotos||[]).find(photo=>photo.id===f.id);if(!saved)fail(400,'Foto original não encontrada.');return {...saved,categoria:f.categoria,descricao:f.descricao ?? saved.descricao ?? ''};}return {id:genId('foto'),categoria:f.categoria,src:f.src,descricao:f.descricao || '',criadoEm:new Date().toISOString()};});}
-    os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura || null;os.edicoesRelatorio=1;os.editadoEm=new Date().toISOString();os.editadoPor=req.session.userId;
+    os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura || null;os.edicoesRelatorio=(os.edicoesRelatorio || 0)+1;os.editadoEm=new Date().toISOString();os.editadoPor=req.session.userId;
   });res.json({os:await related(os)});
 }));
 router.post('/:id/fotos',requireRole('TECNICO'),wrap(async(req,res)=>{
   const {categoria,dataUrl}=req.body || {};if(!categories.includes(categoria) || !imageOK(dataUrl))fail(400,'Envie uma imagem válida de até aproximadamente 5 MB.');let fotos;
-  await mutateCollection('ordens_servico',items=>{const os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Fotos só podem ser anexadas durante o atendimento; para relatório concluído use a edição única.');os.fotos ||= [];os.fotos.push({id:genId('foto'),categoria,src:dataUrl,descricao:'',criadoEm:new Date().toISOString()});fotos=os.fotos;});res.status(201).json({fotos});
+  await mutateCollection('ordens_servico',items=>{const os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Fotos só podem ser anexadas durante o atendimento; para relatório concluído use a edição do relatório.');os.fotos ||= [];os.fotos.push({id:genId('foto'),categoria,src:dataUrl,descricao:'',criadoEm:new Date().toISOString()});fotos=os.fotos;});res.status(201).json({fotos});
 }));
 router.delete('/:id/fotos/:fotoId',requireRole('TECNICO'),wrap(async(req,res)=>{
   let fotos;
   await mutateCollection('ordens_servico',items=>{
     const os=find(items,req.params.id);responsible(os,req);
-    if(os.status!=='EM_ANDAMENTO')fail(409,'Para remover fotos de um relatório concluído, use a edição única.');
+    if(os.status!=='EM_ANDAMENTO')fail(409,'Para remover fotos de um relatório concluído, use a edição do relatório.');
     const index=(os.fotos||[]).findIndex(f=>f.id===req.params.fotoId);
     if(index<0)fail(404,'Foto não encontrada.');
     os.fotos.splice(index,1);fotos=os.fotos;
@@ -96,7 +99,7 @@ router.patch('/:id/fotos/:fotoId',requireRole('TECNICO'),wrap(async(req,res)=>{
   let foto;
   await mutateCollection('ordens_servico',items=>{
     const os=find(items,req.params.id);responsible(os,req);
-    if(os.status!=='EM_ANDAMENTO')fail(409,'Para alterar fotos de um relatório concluído, use a edição única do relatório.');
+    if(os.status!=='EM_ANDAMENTO')fail(409,'Para alterar fotos de um relatório concluído, use a edição do relatório do relatório.');
     foto=(os.fotos||[]).find(f=>f.id===req.params.fotoId);if(!foto)fail(404,'Foto não encontrada.');foto.descricao=descricao;
   });res.json({foto});
 }));

@@ -163,13 +163,15 @@ A cada novo push para a branch configurada, o Render pode fazer novo deploy auto
 
 - Apenas administradores excluem OS, inclusive concluídas. A confirmação informa que o relatório, fotos e assinatura também serão excluídos.
 - Na aba de cadastro de clientes, o administrador pode excluir um cliente. Os dados históricos das OS existentes são preservados; o cliente deixa de estar disponível para novas OS.
-- O técnico responsável pode remover fotos durante o atendimento. Após a conclusão, a remoção é feita na edição única, com nova assinatura e mantendo as fotos obrigatórias de antes e depois.
+- O técnico responsável pode remover fotos durante o atendimento. Após a conclusão, a remoção é feita na edição do relatório, com nova assinatura e mantendo as fotos obrigatórias de antes e depois.
 - O agente de IA e seus acessos foram removidos. O aplicativo não utiliza mais a API OpenAI.
 
 ## Relatórios sem agendamento
 
-O técnico acessa “Relatório sem agendamento” pela agenda ou configurações, informa cliente, serviço e datas/horários de chegada e saída. O atendimento fica em andamento para anexar evidências e coletar assinatura. Após concluir, aparece no histórico e dashboard com os horários informados. Os dados do cliente ficam no atendimento e não criam um cadastro geral. As mesmas regras de autoria, fotos obrigatórias e edição única se aplicam.
+O técnico acessa “Relatório sem agendamento” pela agenda ou configurações, informa cliente, serviço e datas/horários de chegada e saída. O atendimento fica em andamento para anexar evidências e coletar assinatura. Após concluir, aparece no histórico e dashboard com os horários informados. Os dados do cliente ficam no atendimento e não criam um cadastro geral. As mesmas regras de autoria, fotos obrigatórias e edição do relatório se aplicam.
 
 A interface não exibe indicadores de bateria, rede ou horário, nem sino ou aba de notificações. As confirmações e mensagens de erro das ações permanecem disponíveis. Cadastros novos aguardam aprovação em uma tela própria e não têm acesso aos dados internos antes da aprovação.
 
-A assinatura do cliente é opcional nos relatórios agendados e sem agendamento, inclusive na edição única. Sem assinatura, a seção não aparece na consulta nem no PDF.
+A assinatura do cliente é opcional nos relatórios agendados e sem agendamento, inclusive na edição do relatório. Sem assinatura, a seção não aparece na consulta nem no PDF.
+
+O autor pode editar relatórios concluídos sem limite de quantidade. Relatórios sem agendamento permitem selecionar vários técnicos, incluindo o autor; todos veem o atendimento, mas o preenchimento e as alterações continuam com o autor.
