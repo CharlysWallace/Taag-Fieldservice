@@ -80,7 +80,7 @@ function bindFeatures() {
  const avulso=document.getElementById('avulsoForm');if(avulso)avulso.onsubmit=async e=>{
   e.preventDefault();const button=avulso.querySelector('[type="submit"]');button.disabled=true;
   try{const v=id=>document.getElementById(id).value.trim(),chegada=v('avChegada'),saida=v('avSaida');
-   const {os}=await api('/os/avulso',{method:'POST',body:{cliente:{nome:v('avNome'),endereco:v('avEndereco'),telefone:v('avTelefone'),tipoSistema:v('avSistema')},servico:v('avServico'),chegada:new Date(chegada).toISOString(),saida:new Date(saida).toISOString(),data:chegada.slice(0,10),hora:chegada.slice(11,16)}});
+   const {os}=await api('/os/avulso',{method:'POST',body:{tecnicoIds:[...avulso.querySelectorAll('[name=avTecnico]:checked')].map(el=>el.value),cliente:{nome:v('avNome'),endereco:v('avEndereco'),telefone:v('avTelefone'),tipoSistema:v('avSistema')},servico:v('avServico'),chegada:new Date(chegada).toISOString(),saida:new Date(saida).toISOString(),data:chegada.slice(0,10),hora:chegada.slice(11,16)}});
    updateOsCache(os);nav('tech_exec',{id:os.id});
   }catch(err){document.getElementById('avError').textContent=err.message;button.disabled=false;}
  };
@@ -101,14 +101,14 @@ function bindFeatures() {
  }
  if(state.view==='admin_panel'){const btn=document.createElement('button');btn.className='btn btn-outline dashboard-entry';btn.textContent='Dashboard mensal';btn.onclick=openDashboard;app.querySelector('.screen').prepend(btn);}
  if(state.view==='tech_report'){
-  const o=findOS(state.params.id);const btn=document.createElement('button');btn.className='btn btn-outline';btn.textContent=o.edicoesRelatorio?'Relatório já editado (limite atingido)':'Editar relatório (1 vez)';btn.disabled=!ownsReport(o)||Boolean(o.edicoesRelatorio);if(ownsReport(o))app.querySelector('.screen').append(btn);
+  const o=findOS(state.params.id);const btn=document.createElement('button');btn.className='btn btn-outline';btn.textContent='Editar relatório';btn.disabled=!ownsReport(o);if(ownsReport(o))app.querySelector('.screen').append(btn);
   btn.onclick=()=>{reportDraft=structuredClone(o);nav('tech_exec',{id:o.id});};
  }
  if(reportDraft && state.view==='tech_exec'){
-  app.querySelector('.screen').insertAdjacentHTML('afterbegin','<p class="card">Você pode salvar uma única edição. Corrija os dados e, se desejar, inclua a assinatura do cliente.</p><button class="btn btn-ghost" id="cancelEdit">Cancelar edição</button>');
+  app.querySelector('.screen').insertAdjacentHTML('afterbegin','<p class="card">Você pode editar este relatório sempre que necessário. Corrija os dados e, se desejar, inclua a assinatura do cliente.</p><button class="btn btn-ghost" id="cancelEdit">Cancelar edição</button>');
   on('cancelEdit',()=>{const id=reportDraft.id;reportDraft=null;nav('tech_report',{id});});
  }
- if(reportDraft&&state.view==='tech_signature')document.getElementById('finishBtn').textContent='Salvar única edição';
+ if(reportDraft&&state.view==='tech_signature')document.getElementById('finishBtn').textContent='Salvar alterações';
  on('refreshAgenda',async()=>{try{OS_LIST=(await apiGetOS()).ordens;render();}catch(e){toast(e.message);}});
  on('refreshTeam',async()=>{try{const {os}=await api('/os/'+encodeURIComponent(state.params.id));updateOsCache(os);nav(os.status==='CONCLUIDO'?'tech_report':'team_progress',{id:os.id});}catch(e){toast(e.message);}});
  on('knownMode',()=>nav('password',{known:true}));on('forgotMode',()=>nav('password'));on('newReset',()=>{resetRequest=null;sessionStorage.removeItem('taag-reset');render();});
@@ -171,5 +171,5 @@ function bindPhotoDescriptions(){
 function screenAvulso(){
  if(state.role!=='TECNICO')return '<div class="screen">Acesso restrito ao técnico.</div>';
  const fields=[['avNome','Cliente','text',180],['avEndereco','Endereço','text',700],['avTelefone','Telefone (opcional)','tel',80],['avSistema','Tipo do sistema','text',500],['avServico','Serviço prestado','text',300],['avChegada','Data e horário de chegada','datetime-local',40],['avSaida','Data e horário de saída','datetime-local',40]];
- return `${topbar('Relatório sem agendamento')}<div class="screen"><p>Informe o atendimento realizado. Depois, preencha o relatório, anexe as fotos e finalize; a assinatura é opcional. Os dados do cliente serão registrados somente neste atendimento.</p><form id="avulsoForm" class="card client-form">${fields.map(([id,label,type,max])=>`<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" maxlength="${max}" ${id==='avTelefone'?'':'required'}></div>`).join('')}<p id="avError" role="alert"></p><button class="btn btn-primary" type="submit">Continuar para o relatório</button></form></div>`;
+ return `${topbar('Relatório sem agendamento')}<div class="screen"><p>Informe o atendimento realizado. Depois, preencha o relatório, anexe as fotos e finalize; a assinatura é opcional. Os dados do cliente serão registrados somente neste atendimento.</p><form id="avulsoForm" class="card client-form">${fields.map(([id,label,type,max])=>`<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" maxlength="${max}" ${id==='avTelefone'?'':'required'}></div>`).join('')}<fieldset class="avulso-team"><legend>Técnicos responsáveis pelo atendimento</legend><p>Selecione a equipe. Você ficará responsável por preencher e editar o relatório; os demais poderão acompanhar.</p><div class="team-options">${TECNICOS.map(t=>`<label><input type="checkbox" name="avTecnico" value="${escapeHtml(t.id)}" ${t.id===state.currentUser.tecnicoId?'checked disabled':''}>${escapeHtml(t.nome)}${t.id===state.currentUser.tecnicoId?' (você)':''}</label>`).join('')}</div></fieldset><p id="avError" role="alert"></p><button class="btn btn-primary" type="submit">Continuar para o relatório</button></form></div>`;
 }
