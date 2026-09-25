@@ -96,7 +96,7 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
   assert.equal((await req('second',base+'/checkout','POST',report)).status,403);
   assert.equal((await req('outside',base+'/checkout','POST',report)).status,400);
   for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req('outside',base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
-  const done=await req('outside',base+'/checkout','POST',{...report,assinatura:null});assert.equal(done.data.os.assinatura,null);assert.equal(done.status,200);assert.equal(done.data.os.checkin.timestamp,body.chegada);assert.equal(done.data.os.checkout.timestamp,body.saida);
+  const done=await req('outside',base+'/checkout','POST',{...report,assinatura:null,servicoPrestado:'Serviço avulso atualizado'});assert.equal(done.data.os.tipoServicoPersonalizado,'Serviço avulso atualizado');assert.equal(done.data.os.assinatura,null);assert.equal(done.status,200);assert.equal(done.data.os.checkin.timestamp,body.chegada);assert.equal(done.data.os.checkout.timestamp,body.saida);
   assert.equal((await req('second',base+'/report','PATCH',report)).status,403);
   for(let i=0;i<3;i++)assert.equal((await req('outside',base+'/report','PATCH',{descricao:'Revisão '+i,camposServico:{},assinatura:null})).status,200);
   assert.equal((await req('admin','/clientes')).data.clientes.some(c=>c.nome===body.cliente.nome),false);
@@ -107,8 +107,9 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
   const base='/os/'+created.data.os.id;await req('outside',base+'/checkin','POST');
   for(const categoria of ['ANTES','DEPOIS'])await req('outside',base+'/fotos','POST',{categoria,dataUrl:image});
   assert.equal((await req('outside',base+'/checkout','POST',{...report,assinatura:'inválida'})).status,400);
-  const completed=await req('outside',base+'/checkout','POST',{descricao:'Feito',camposServico:{}});assert.equal(completed.status,200);assert.equal(completed.data.os.assinatura,null);
-  const revised=await req('outside',base+'/report','PATCH',{descricao:'Corrigido',camposServico:{},assinatura:null});assert.equal(revised.status,200);assert.equal(revised.data.os.assinatura,null);
+  for(const servicoPrestado of ['', 'a'.repeat(301), 42])assert.equal((await req('outside',base+'/checkout','POST',{...report,servicoPrestado})).status,400);
+  const completed=await req('outside',base+'/checkout','POST',{descricao:'Feito',camposServico:{},servicoPrestado:'Serviço agendado atualizado'});assert.equal(completed.data.os.tipoServicoPersonalizado,'Serviço agendado atualizado');assert.equal(completed.status,200);assert.equal(completed.data.os.assinatura,null);
+  const revised=await req('outside',base+'/report','PATCH',{descricao:'Corrigido',camposServico:{},assinatura:null,servicoPrestado:'Serviço revisado'});assert.equal(revised.data.os.tipoServicoPersonalizado,'Serviço revisado');assert.equal(revised.status,200);assert.equal(revised.data.os.assinatura,null);
   await req('admin',base,'DELETE');
  });
  await t.test('pedido exige aprovação + token, uso único invalida sessões antigas',async()=>{

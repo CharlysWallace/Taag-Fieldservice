@@ -370,7 +370,7 @@ function screenTechExec(){
   return `
   ${topbar('Execução do serviço')}
   <div class="screen">
-    <div class="section-label">Tipo de serviço</div><div class="card"><b>${osServiceLabel(o)}</b><div class="service-fields" id="serviceFields">${o.tipoServico==='MANUTENCAO_WIFI'?'Modelo do equipamento · Quantidade de Access Points · SSID · Teste de conexão':o.tipoServico==='INSTALACAO_REDE'?'Pontos instalados · Equipamentos · Testes realizados':'Preencha os detalhes técnicos na descrição do atendimento.'}</div></div><div class="section-label">Descrição do atendimento</div>
+    <div class="field"><label for="reportService">Tipo de serviço prestado</label><input id="reportService" type="text" maxlength="300" required value="${escapeHtml(o.servicoRascunho ?? (o.tipoServico==='PERSONALIZADO'?o.tipoServicoPersonalizado:serviceLabel(o.tipoServico).replace(/^[^\p{L}\p{N}]+/u,'')))}"><small>Você pode alterar o serviço enquanto preenche o relatório.</small></div><div class="section-label">Descrição do atendimento</div>
     <div class="desc-row">
       <div class="field">
         <textarea id="descField" placeholder="Descreva o serviço realizado…">${escapeHtml(o.descricao||'')}</textarea>
@@ -735,6 +735,7 @@ function render(){
    ============================================================ */
 function bindEvents(){
   const app = document.getElementById('app');
+  const serviceInput=document.getElementById('reportService');if(serviceInput)serviceInput.oninput=()=>{findOS(state.params.id).servicoRascunho=serviceInput.value;};
   app.querySelectorAll('[data-report-field]').forEach(el => { el.oninput = () => { const o = findOS(state.params.id); o.camposServico ||= {}; o.camposServico[el.dataset.reportField] = el.value; }; });
   const newClient = document.getElementById('newClientBtn');
   if (newClient) {
@@ -943,6 +944,7 @@ function bindEvents(){
         toast('Registre pelo menos uma foto ANTES e uma DEPOIS do serviço');
         return;
       }
+      if(o.servicoRascunho!==undefined&&!o.servicoRascunho.trim()){toast('Informe o tipo de serviço prestado.');return;}
       const button=document.getElementById('toSignBtn');button.disabled=true;
       try { await saveAllPhotoDescriptions(o); nav('tech_signature', { id: state.params.id }); }
       catch(err){toast(err.message);}finally{button.disabled=false;}
@@ -1195,7 +1197,7 @@ function setupSignaturePad(canvas, osId){
     try{
       const o = findOS(osId);
       const assinaturaDataUrl = has ? canvas.toDataURL('image/png') : null;
-      const body = { descricao: o.descricao || '', camposServico: o.camposServico || {}, assinatura: assinaturaDataUrl };
+      const body = { descricao: o.descricao || '', camposServico: o.camposServico || {}, assinatura: assinaturaDataUrl, ...(o.servicoRascunho!==undefined?{servicoPrestado:o.servicoRascunho.trim()}:{}) };
       const { os } = reportDraft ? await api('/os/'+encodeURIComponent(osId)+'/report', {method:'PATCH', body:{...body,fotos:o.fotos.map(f=>(OS_LIST.find(item=>item.id===osId)?.fotos||[]).some(saved=>saved.id===f.id&&saved.src===f.src)?{id:f.id,categoria:f.categoria,descricao:f.descricao||''}:{categoria:f.categoria,src:f.src,descricao:f.descricao||''})}}) : await apiCheckout(osId, body);
       reportDraft = null;
       updateOsCache(os);
