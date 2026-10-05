@@ -36,7 +36,6 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
  await t.test('somente autor conclui e salva várias revisões',async()=>{
   const base='/os/'+t.osId;
   assert.equal((await req(t.other,base+'/fotos','POST',{categoria:'ANTES',dataUrl:image})).status,403);
-  assert.equal((await req(t.owner,base+'/checkout','POST',report)).status,400);
   for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req(t.owner,base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
   const extra=await req(t.owner,base+'/fotos','POST',{categoria:'DURANTE',dataUrl:image});
   const removeRoute=base+'/fotos/'+extra.data.fotos.at(-1).id;
@@ -67,6 +66,8 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
   assert.equal((await req(t.owner,captionRoute,'DELETE')).status,409);
   assert.equal((await req(t.owner,base)).data.os.edicoesRelatorio,3);
   assert.equal((await req(t.owner,base)).data.os.fotos[0].descricao,'Descrição revisada');
+  const removed=await req(t.owner,base+'/report','PATCH',{...report,fotos:[]});assert.equal(removed.status,200);assert.deepEqual(removed.data.os.fotos,[]);
+  const optional=await req(t.owner,base+'/report','PATCH',{...report,fotos:[{categoria:'DURANTE',src:image}]});assert.equal(optional.status,200);assert.equal(optional.data.os.fotos.length,1);
  });
  await t.test('perfil gerencial recebe só dados do dashboard',async()=>{
   for(const route of ['/os','/os/'+t.osId,'/acessos','/clientes'])assert.equal((await req('viewer',route)).status,403);
@@ -94,8 +95,6 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
   assert.equal((await req('second',base)).status,200);
   assert.equal((await req('second','/os')).data.ordens.some(o=>o.id===created.data.os.id),true);
   assert.equal((await req('second',base+'/checkout','POST',report)).status,403);
-  assert.equal((await req('outside',base+'/checkout','POST',report)).status,400);
-  for(const categoria of ['ANTES','DEPOIS'])assert.equal((await req('outside',base+'/fotos','POST',{categoria,dataUrl:image})).status,201);
   const done=await req('outside',base+'/checkout','POST',{...report,assinatura:null,servicoPrestado:'Serviço avulso atualizado'});assert.equal(done.data.os.tipoServicoPersonalizado,'Serviço avulso atualizado');assert.equal(done.data.os.assinatura,null);assert.equal(done.status,200);assert.equal(done.data.os.checkin.timestamp,body.chegada);assert.equal(done.data.os.checkout.timestamp,body.saida);
   assert.equal((await req('second',base+'/report','PATCH',report)).status,403);
   for(let i=0;i<3;i++)assert.equal((await req('outside',base+'/report','PATCH',{descricao:'Revisão '+i,camposServico:{},assinatura:null})).status,200);
@@ -105,7 +104,6 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
  await t.test('OS agendada conclui sem assinatura e aceita assinatura apenas válida',async()=>{
   const created=await req('admin','/os','POST',{clienteId:'c1',tecnicoIds:['t3'],tipoServico:'SUPORTE',data:'2026-09-18',hora:'10:00'});
   const base='/os/'+created.data.os.id;await req('outside',base+'/checkin','POST');
-  for(const categoria of ['ANTES','DEPOIS'])await req('outside',base+'/fotos','POST',{categoria,dataUrl:image});
   assert.equal((await req('outside',base+'/checkout','POST',{...report,assinatura:'inválida'})).status,400);
   for(const servicoPrestado of ['', 'a'.repeat(301), 42])assert.equal((await req('outside',base+'/checkout','POST',{...report,servicoPrestado})).status,400);
   const completed=await req('outside',base+'/checkout','POST',{descricao:'Feito',camposServico:{},servicoPrestado:'Serviço agendado atualizado'});assert.equal(completed.data.os.tipoServicoPersonalizado,'Serviço agendado atualizado');assert.equal(completed.status,200);assert.equal(completed.data.os.assinatura,null);
@@ -140,4 +138,19 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
   assert.equal((await req('admin','/os/'+t.osId,'DELETE')).status,200);
   assert.equal((await req('admin','/os/'+t.osId)).status,404);
  });
+});
+
+test('seleção múltipla mantém fotos, continua após falha e funciona nas revisões',async()=>{
+ const vm=require('node:vm');
+ const source=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
+ const handler=source.slice(source.indexOf('async function handlePhoto('),source.indexOf('// ---- 7c.'));
+ for(const editing of [false,true]){
+  const order={fotos:[{id:'original'}],servicoRascunho:'Rede'};
+  const input={files:[{name:'a'},{name:'bad'},{name:'b'}],value:'selection'},button={disabled:false};
+  let uploads=0,rendered=0,message='';
+  const context=vm.createContext({photoUploadInProgress:false,reportDraft:editing?order:null,findOS:()=>order,document:{getElementById:()=>button},state:{view:'tech_exec',params:{id:'os'}},crypto:{randomUUID:()=>String(order.fotos.length)},preparePhoto:async file=>{if(file.name==='bad')throw Error('invalid');return file.name;},apiUploadFoto:async(id,categoria,src)=>{uploads++;return{fotos:[...order.fotos,{categoria,src}]};},render:()=>rendered++,toast:text=>message=text});
+  vm.runInContext(handler,context);
+  await context.handlePhoto({target:input},'os','DURANTE');
+  assert.equal(order.fotos.length,3);assert.equal(order.fotos[0].id,'original');assert.equal(order.fotos[2].src,'b');assert.equal(order.servicoRascunho,'Rede');assert.equal(uploads,editing?0:2);assert.equal(rendered,1);assert.match(message,/bad/);assert.equal(input.disabled,false);assert.equal(button.disabled,false);assert.equal(context.photoUploadInProgress,false);
+ }
 });
