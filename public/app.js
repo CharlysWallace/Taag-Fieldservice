@@ -381,7 +381,7 @@ function screenTechExec(){
     </div>
 
     ${reportFields(o)}
-    <div class="section-label">Evidências do serviço</div><div class="photo-category"><label>Categoria da foto</label><select id="photoCategory"><option value="ANTES">📷 Antes do serviço</option><option value="DURANTE">📷 Durante o serviço</option><option value="DEPOIS">📷 Após a conclusão</option><option value="EQUIPAMENTOS">📷 Equipamentos utilizados</option></select></div><label class="photo-add">📷 Toque para anexar foto (câmera ou galeria)<input type="file" accept="image/*" id="photoInput" style="display:none;"></label>
+    <div class="section-label">Fotos do relatório (opcionais)</div><div class="photo-category"><label>Categoria da foto</label><select id="photoCategory"><option value="ANTES">📷 Antes do serviço</option><option value="DURANTE">📷 Durante o serviço</option><option value="DEPOIS">📷 Após a conclusão</option><option value="EQUIPAMENTOS">📷 Equipamentos utilizados</option></select></div><label class="photo-add">📷 Adicionar fotos (selecione uma ou mais)<input type="file" multiple accept="image/*" id="photoInput" style="display:none;"></label>
     ${photoGallery(o,true)}
 
     <button class="btn btn-primary" style="margin-top:22px;" id="toSignBtn">Finalizar relatório</button>
@@ -414,7 +414,7 @@ function screenTechReport(){
     <div class="card">
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
       <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
-      <div class="kv"><span class="k">Técnico</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>
+      <div class="kv"><span class="k">Equipe</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>${o.responsavelUsuarioId?`<div class="kv"><span class="k">Responsável pelo relatório</span><span class="v">${escapeHtml(o.responsavelNome)}</span></div>`:""}
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
       <div class="kv"><span class="k">Duração</span><span class="v">${fmtDur(o.checkin?.timestamp, o.checkout?.timestamp)}</span></div>
@@ -513,7 +513,7 @@ function screenAdminDetail(){
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
       <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
       <div class="kv"><span class="k">E-mail do cliente</span><span class="v">${escapeHtml(o.cliente.email || '—')}</span></div>
-      <div class="kv"><span class="k">Técnico</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>
+      <div class="kv"><span class="k">Equipe</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>${o.responsavelUsuarioId?`<div class="kv"><span class="k">Responsável pelo relatório</span><span class="v">${escapeHtml(o.responsavelNome)}</span></div>`:""}
       <div class="kv"><span class="k">Tipo de serviço</span><span class="v">${osServiceLabel(o)}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
@@ -647,7 +647,7 @@ function screenViewDetail(){
     <div class="card">
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
       <div class="kv"><span class="k">Endereço</span><span class="v">${escapeHtml(o.cliente.endereco)}</span></div>
-      <div class="kv"><span class="k">Técnico</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>
+      <div class="kv"><span class="k">Equipe</span><span class="v">${escapeHtml(o.tecnicoNome)}</span></div>${o.responsavelUsuarioId?`<div class="kv"><span class="k">Responsável pelo relatório</span><span class="v">${escapeHtml(o.responsavelNome)}</span></div>`:""}
       <div class="kv"><span class="k">Status</span><span class="v">${statusLabel(o.status)}</span></div>
       <div class="kv"><span class="k">Check-in</span><span class="v">${fmtTime(o.checkin?.timestamp)}</span></div>
       <div class="kv"><span class="k">Check-out</span><span class="v">${fmtTime(o.checkout?.timestamp)}</span></div>
@@ -939,11 +939,7 @@ function bindEvents(){
 
     document.getElementById('toSignBtn').onclick = async ()=>{
       const o=findOS(state.params.id);
-      const cats=(o.fotos||[]).map(f=>f.categoria);
-      if(!cats.includes('ANTES')||!cats.includes('DEPOIS')){
-        toast('Registre pelo menos uma foto ANTES e uma DEPOIS do serviço');
-        return;
-      }
+      if(photoUploadInProgress){toast('Aguarde o envio das fotos.');return;}
       if(o.servicoRascunho!==undefined&&!o.servicoRascunho.trim()){toast('Informe o tipo de serviço prestado.');return;}
       const button=document.getElementById('toSignBtn');button.disabled=true;
       try { await saveAllPhotoDescriptions(o); nav('tech_signature', { id: state.params.id }); }
@@ -1128,20 +1124,22 @@ function toggleDictation(btn, textarea, osId){
 }
 
 // ---- 7b. Foto com marca d'água automática — agora sobe pro servidor (POST /api/os/:id/fotos) ----
-function handlePhoto(e, osId, category="EVIDENCIA"){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev =>{
-    const img = new Image();
-    img.onload = async ()=>{
+let photoUploadInProgress = false;
+function preparePhoto(file, o) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler a foto.'));
+    reader.onload = ev => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Imagem inválida ou formato não suportado.'));
+      img.onload = () => {
+        try {
       const canvas = document.createElement('canvas');
       const scale = Math.min(1, 900/img.width);
       canvas.width = img.width*scale; canvas.height = img.height*scale;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
-      const o = findOS(osId);
       const barH = 46;
       ctx.fillStyle = 'rgba(0,0,0,.55)';
       ctx.fillRect(0, canvas.height-barH, canvas.width, barH);
@@ -1153,17 +1151,41 @@ function handlePhoto(e, osId, category="EVIDENCIA"){
       ctx.fillText(linha2, 10, canvas.height-9);
 
       const dataUrl = canvas.toDataURL('image/jpeg', .85);
-      try{
-        const { fotos } = reportDraft ? {fotos:[...(o.fotos||[]),{id:crypto.randomUUID(),categoria:category,src:dataUrl}]} : await apiUploadFoto(osId, category, dataUrl);
-        o.fotos = fotos; // servidor devolve a lista completa e atualizada de fotos da OS
-        render();
-      }catch(err){
-        toast(err.message || 'Não foi possível anexar a foto.');
-      }
+          resolve(dataUrl);
+        } catch (err) { reject(err); }
+      };
+      img.src = ev.target.result;
     };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
+  });
+}
+async function handlePhoto(e, osId, category="EVIDENCIA") {
+  const input=e.target, files=Array.from(input.files || []);
+  if(!files.length || photoUploadInProgress) return;
+  const o=findOS(osId), draft=reportDraft;
+  photoUploadInProgress=true;
+  input.disabled=true;
+  const button=document.getElementById('toSignBtn');
+  if(button) button.disabled=true;
+  let added=0;
+  const failed=[];
+  try {
+    for(const file of files) {
+      try {
+        const dataUrl=await preparePhoto(file,o);
+        const {fotos}=draft ? {fotos:[...(o.fotos||[]),{id:crypto.randomUUID(),categoria:category,src:dataUrl}]} : await apiUploadFoto(osId,category,dataUrl);
+        o.fotos=fotos;
+        added++;
+      } catch(err) { failed.push(file.name); }
+    }
+  } finally {
+    photoUploadInProgress=false;
+    input.disabled=false;
+    input.value='';
+    if(button) button.disabled=false;
+    if(state.view==='tech_exec' && state.params.id===osId) render();
+  }
+  toast(`${added} foto(s) adicionada(s).${failed.length ? ' Não foi possível adicionar: '+failed.join(', ')+'. Tente novamente.' : ''}`);
 }
 
 // ---- 7c. Assinatura digital + checkout (POST /api/os/:id/checkout) ----

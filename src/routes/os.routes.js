@@ -68,7 +68,6 @@ router.post('/:id/checkin',requireRole('TECNICO'),wrap(async(req,res)=>{
 router.post('/:id/checkout',requireRole('TECNICO'),wrap(async(req,res)=>{
   reportBody(req.body || {});let os;
   await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Esta OS precisa estar em andamento para ser concluída.');
-    const cats=(os.fotos || []).map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Anexe uma foto antes e uma depois do serviço.');
     os.status='CONCLUIDO';if(req.body.servicoPrestado!==undefined){os.tipoServico='PERSONALIZADO';os.tipoServicoPersonalizado=req.body.servicoPrestado.trim();}os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura || null;os.checkout={timestamp:os.origem==='AVULSO'?os.saidaInformada:new Date().toISOString(),manual:os.origem==='AVULSO'};os.edicoesRelatorio=0;
   });res.json({os:await related(os)});
 }));
@@ -76,7 +75,7 @@ router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
   reportBody(req.body || {});let os;
   if(req.body.fotos!==undefined && (!Array.isArray(req.body.fotos) || req.body.fotos.some(f=>!f || !categories.includes(f.categoria) || !validPhotoDescription(f.descricao) || (f.src!==undefined ? !imageOK(f.src) : typeof f.id!=='string'))))fail(400,'Fotos inválidas.');
   await mutateCollection('ordens_servico',items=>{os=find(items,req.params.id);responsible(os,req);if(os.status!=='CONCLUIDO')fail(409,'Conclua o atendimento antes de editar o relatório.');
-    if(req.body.fotos){const cats=req.body.fotos.map(f=>f.categoria);if(!cats.includes('ANTES') || !cats.includes('DEPOIS'))fail(400,'Mantenha ao menos uma foto antes e uma depois.');os.fotos=req.body.fotos.map(f=>{if(f.src===undefined){const saved=(os.fotos||[]).find(photo=>photo.id===f.id);if(!saved)fail(400,'Foto original não encontrada.');return {...saved,categoria:f.categoria,descricao:f.descricao ?? saved.descricao ?? ''};}return {id:genId('foto'),categoria:f.categoria,src:f.src,descricao:f.descricao || '',criadoEm:new Date().toISOString()};});}
+    if(req.body.fotos){os.fotos=req.body.fotos.map(f=>{if(f.src===undefined){const saved=(os.fotos||[]).find(photo=>photo.id===f.id);if(!saved)fail(400,'Foto original não encontrada.');return {...saved,categoria:f.categoria,descricao:f.descricao ?? saved.descricao ?? ''};}return {id:genId('foto'),categoria:f.categoria,src:f.src,descricao:f.descricao || '',criadoEm:new Date().toISOString()};});}
     if(req.body.servicoPrestado!==undefined){os.tipoServico='PERSONALIZADO';os.tipoServicoPersonalizado=req.body.servicoPrestado.trim();}os.descricao=req.body.descricao;os.camposServico=req.body.camposServico;os.assinatura=req.body.assinatura || null;os.edicoesRelatorio=(os.edicoesRelatorio || 0)+1;os.editadoEm=new Date().toISOString();os.editadoPor=req.session.userId;
   });res.json({os:await related(os)});
 }));
