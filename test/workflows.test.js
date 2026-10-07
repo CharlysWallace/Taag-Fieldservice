@@ -110,6 +110,18 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
   const revised=await req('outside',base+'/report','PATCH',{descricao:'Corrigido',camposServico:{},assinatura:null,servicoPrestado:'Serviço revisado'});assert.equal(revised.data.os.tipoServicoPersonalizado,'Serviço revisado');assert.equal(revised.status,200);assert.equal(revised.data.os.assinatura,null);
   await req('admin',base,'DELETE');
  });
+ await t.test('várias fotos com resposta compacta e repetição não duplicam anexos',async()=>{
+  const created=await req('admin','/os','POST',{clienteId:'c1',tecnicoIds:['t3'],tipoServico:'SUPORTE',data:'2026-10-07',hora:'10:00'});
+  const base='/os/'+created.data.os.id;await req('outside',base+'/checkin','POST');
+  for(let i=0;i<4;i++){
+   const body={categoria:'EVIDENCIA',dataUrl:image,uploadId:'test-photo-'+i,compact:true};
+   const first=await req('outside',base+'/fotos','POST',body);assert.equal(first.status,201);assert.ok(first.data.foto.id);assert.equal(first.data.fotos,undefined);
+   const again=await req('outside',base+'/fotos','POST',body);assert.equal(again.data.foto.id,first.data.foto.id);
+  }
+  assert.equal((await req('outside',base)).data.os.fotos.length,4);
+  assert.equal((await req('first',base+'/fotos','POST',{categoria:'EVIDENCIA',dataUrl:image,uploadId:'test-photo-0',compact:true})).status,403);
+  await req('admin',base,'DELETE');
+ });
  await t.test('pedido exige aprovação + token, uso único invalida sessões antigas',async()=>{
   const reset=(await request('/password/request','POST',{email:'first@example.test'})).data;
   assert.equal((await request('/password/complete','POST',{...reset,novaSenha:'Replacement-567'})).status,403);
@@ -152,5 +164,33 @@ test('seleção múltipla mantém fotos, continua após falha e funciona nas rev
   vm.runInContext(handler,context);
   await context.handlePhoto({target:input},'os','DURANTE');
   assert.equal(order.fotos.length,3);assert.equal(order.fotos[0].id,'original');assert.equal(order.fotos[2].src,'b');assert.equal(order.servicoRascunho,'Rede');assert.equal(uploads,editing?0:2);assert.equal(rendered,1);assert.match(message,/bad/);assert.equal(input.disabled,false);assert.equal(button.disabled,false);assert.equal(context.photoUploadInProgress,false);
+ }
+});
+
+test('queda de conexão durante gravação não encerra o processo e descarta o cliente',async()=>{
+ const vm=require('node:vm'),{EventEmitter}=require('node:events');
+ const source=fs.readFileSync(path.join(__dirname,'../src/db.js'),'utf8');
+ for(const failRollback of [false,true]){
+  const failure=Error('Connection terminated unexpectedly');
+  const client=new EventEmitter();let released,queries=[];
+  client.query=async sql=>{queries.push(sql);if(sql==='BEGIN')return {};if(sql==='ROLLBACK')throw Error('rollback disconnected');if(failRollback)throw failure;client.emit('error',failure);throw failure;};
+  client.release=err=>{released=err;};
+  class Pool extends EventEmitter {async connect(){return client;}}
+  const module={exports:{}};
+  vm.runInNewContext(source,{module,exports:module.exports,require:name=>name==='pg'?{Pool}:require(name),process:{env:{DATABASE_URL:'postgres://example.test/test'}},__dirname:path.join(__dirname,'../src'),console});
+  await assert.rejects(module.exports.mutateCollection('ordens_servico',()=>{}),err=>err===failure);
+  assert.ok(released instanceof Error);assert.equal(client.listenerCount('error'),0);
+  assert.equal(queries.includes('ROLLBACK'),failRollback);
+ }
+});
+
+test('nova tentativa usa o mesmo identificador e não repete erros de permissão',async()=>{
+ const vm=require('node:vm');const source=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
+ const start=source.indexOf('async function apiUploadFoto('),end=source.indexOf('\n}',start)+2;
+ for(const status of [503,403]){
+  const calls=[];const context=vm.createContext({crypto:{randomUUID:()=> 'stable-id'},setTimeout:fn=>fn(),api:async(url,options)=>{calls.push(options.body);if(calls.length===1)throw Object.assign(Error('failure'),{status});return{foto:{id:'saved'}};}});
+  vm.runInContext(source.slice(start,end),context);
+  if(status===503){await context.apiUploadFoto('os','EVIDENCIA','image');assert.equal(calls.length,2);assert.equal(calls[0].uploadId,calls[1].uploadId);}
+  else{await assert.rejects(context.apiUploadFoto('os','EVIDENCIA','image'));assert.equal(calls.length,1);}
  }
 });

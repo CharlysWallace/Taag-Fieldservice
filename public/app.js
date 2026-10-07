@@ -64,7 +64,16 @@ const apiCreateOS = (payload) => api('/os', { method: 'POST', body: payload });
 const apiDeleteOS = (id) => api(`/os/${id}`, { method: 'DELETE' });
 const apiCheckin = (id) => api(`/os/${id}/checkin`, { method: 'POST' });
 const apiCheckout = (id, payload) => api(`/os/${id}/checkout`, { method: 'POST', body: payload });
-const apiUploadFoto = (id, categoria, dataUrl) => api(`/os/${id}/fotos`, { method: 'POST', body: { categoria, dataUrl } });
+async function apiUploadFoto(id, categoria, dataUrl) {
+  const uploadId=crypto.randomUUID();
+  for(let attempt=0;attempt<3;attempt++) {
+    try { return await api(`/os/${id}/fotos`, {method:'POST',body:{categoria,dataUrl,uploadId,compact:true}}); }
+    catch(err) {
+      if(attempt===2 || (err.status && ![500,502,503,504].includes(err.status)))throw err;
+      await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));
+    }
+  }
+}
 
 
 /* ---------- 1. CACHES LOCAIS ----------
@@ -1135,7 +1144,7 @@ function preparePhoto(file, o) {
       img.onload = () => {
         try {
       const canvas = document.createElement('canvas');
-      const scale = Math.min(1, 900/img.width);
+      const scale = Math.min(1, 1200/img.width, 1200/img.height);
       canvas.width = img.width*scale; canvas.height = img.height*scale;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img,0,0,canvas.width,canvas.height);
@@ -1166,23 +1175,27 @@ async function handlePhoto(e, osId, category="EVIDENCIA") {
   photoUploadInProgress=true;
   input.disabled=true;
   const button=document.getElementById('toSignBtn');
+  const buttonText=button?.textContent;
   if(button) button.disabled=true;
   let added=0;
   const failed=[];
   try {
-    for(const file of files) {
+    for(const [index,file] of files.entries()) {
+      if(button) button.textContent=`Enviando foto ${index+1} de ${files.length}…`;
       try {
         const dataUrl=await preparePhoto(file,o);
-        const {fotos}=draft ? {fotos:[...(o.fotos||[]),{id:crypto.randomUUID(),categoria:category,src:dataUrl}]} : await apiUploadFoto(osId,category,dataUrl);
-        o.fotos=fotos;
+        const result=draft ? {foto:{id:crypto.randomUUID(),categoria:category,src:dataUrl}} : await apiUploadFoto(osId,category,dataUrl);
+        if(result.foto) o.fotos=[...(o.fotos||[]).filter(f=>f.id!==result.foto.id),result.foto];
+        else if(Array.isArray(result.fotos)) o.fotos=result.fotos;
+        else throw new Error('O servidor não confirmou o envio. Tente novamente.');
         added++;
-      } catch(err) { failed.push(file.name); }
+      } catch(err) { failed.push(file.name+': '+(err.message || 'Não foi possível enviar a imagem')); }
     }
   } finally {
     photoUploadInProgress=false;
     input.disabled=false;
     input.value='';
-    if(button) button.disabled=false;
+    if(button) {button.disabled=false;button.textContent=buttonText;}
     if(state.view==='tech_exec' && state.params.id===osId) render();
   }
   toast(`${added} foto(s) adicionada(s).${failed.length ? ' Não foi possível adicionar: '+failed.join(', ')+'. Tente novamente.' : ''}`);
