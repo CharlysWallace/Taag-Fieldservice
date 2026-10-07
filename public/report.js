@@ -52,10 +52,9 @@ function buildTaagReport(jsPDF, o, logo) {
     try { doc.addImage(o.assinatura, 'PNG', margin, y, 65, 22); }
     catch { throw new Error('assinatura inválida'); }
   }
-  const categories = { ANTES: 'Antes do serviço', DURANTE: 'Durante o serviço', DEPOIS: 'Após a conclusão', EQUIPAMENTOS: 'Equipamentos utilizados' };
   (o.fotos || []).forEach((photo, index) => {
     nextPage();
-    section('EVIDÊNCIAS FOTOGRÁFICAS', `Foto ${index + 1} de ${o.fotos.length} - ${categories[photo.categoria] || 'Registro do atendimento'}`);
+    section('EVIDÊNCIAS FOTOGRÁFICAS', `Foto ${index + 1} de ${o.fotos.length}`);
     if(photo.descricao) section('DESCRIÇÃO DA FOTO', photo.descricao);
     if(bottom-y<40) nextPage();
     try {
