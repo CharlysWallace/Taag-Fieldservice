@@ -381,7 +381,7 @@ function screenTechExec(){
     </div>
 
     ${reportFields(o)}
-    <div class="section-label">Fotos do relatório (opcionais)</div><div class="photo-category"><label>Categoria da foto</label><select id="photoCategory"><option value="ANTES">📷 Antes do serviço</option><option value="DURANTE">📷 Durante o serviço</option><option value="DEPOIS">📷 Após a conclusão</option><option value="EQUIPAMENTOS">📷 Equipamentos utilizados</option></select></div><label class="photo-add">📷 Adicionar fotos (selecione uma ou mais)<input type="file" multiple accept="image/*" id="photoInput" style="display:none;"></label>
+    <div class="section-label">Fotos do relatório (opcionais)</div><label class="photo-add">📷 Adicionar fotos<input type="file" multiple accept="image/*" id="photoInput" style="display:none;"></label>
     ${photoGallery(o,true)}
 
     <button class="btn btn-primary" style="margin-top:22px;" id="toSignBtn">Finalizar relatório</button>
@@ -935,7 +935,7 @@ function bindEvents(){
     const micBtn = document.getElementById('micBtn');
     micBtn.onclick = ()=> toggleDictation(micBtn, descField, state.params.id);
 
-    document.getElementById('photoInput').onchange = e => handlePhoto(e, state.params.id, document.getElementById('photoCategory').value);
+    document.getElementById('photoInput').onchange = e => handlePhoto(e, state.params.id);
 
     document.getElementById('toSignBtn').onclick = async ()=>{
       const o=findOS(state.params.id);
