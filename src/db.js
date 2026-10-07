@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const orderStorage = require('./order-storage');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const usePostgres = Boolean(process.env.DATABASE_URL);
@@ -53,6 +54,8 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_app_collections_updated_at
     ON app_collections (updated_at DESC)
   `);
+  await orderStorage.schema(db);
+  await transaction(client=>orderStorage.migrate(client));
   console.log('[db] PostgreSQL conectado e esquema verificado.');
 }
 
@@ -69,6 +72,7 @@ async function readCollection(collection) {
     }
   }
 
+  if(collection==='ordens_servico')return transaction(async client=>{await orderStorage.lock(client);return orderStorage.read(client);});
   const result = await getPool().query(
     'SELECT data FROM app_collections WHERE collection_name = $1',
     [collection]
@@ -85,6 +89,7 @@ async function writeCollection(collection, data) {
     return;
   }
 
+  if(collection==='ordens_servico')return mutateCollection(collection,items=>{items.splice(0,items.length,...data);});
   await getPool().query(
     `INSERT INTO app_collections (collection_name, data, updated_at)
      VALUES ($1, $2::jsonb, NOW())
@@ -122,6 +127,22 @@ async function mutateCollection(collection, change) {
     try { await pending; } finally { if (localMutations.get(collection) === pending) localMutations.delete(collection); }
     return;
   }
+  return transaction(async client=>{
+    if(collection==='ordens_servico'){
+      await orderStorage.lock(client);
+      const items=await orderStorage.read(client), before=orderStorage.snapshot(items);
+      change(items);
+      await orderStorage.save(client,before,items);
+      return;
+    }
+    await client.query("INSERT INTO app_collections (collection_name, data) VALUES ($1, '[]'::jsonb) ON CONFLICT DO NOTHING", [collection]);
+    const result=await client.query('SELECT data FROM app_collections WHERE collection_name=$1 FOR UPDATE',[collection]);
+    const items=result.rows[0].data;change(items);
+    await client.query('UPDATE app_collections SET data=$2::jsonb, updated_at=NOW() WHERE collection_name=$1',[collection,JSON.stringify(items)]);
+  });
+}
+
+async function transaction(work) {
   const client = await getPool().connect();
   // Conexões em uso não possuem o listener de erros das conexões ociosas do pool.
   let connectionError = null;
@@ -129,11 +150,9 @@ async function mutateCollection(collection, change) {
   client.on('error', onClientError);
   try {
     await client.query('BEGIN');
-    await client.query("INSERT INTO app_collections (collection_name, data) VALUES ($1, '[]'::jsonb) ON CONFLICT DO NOTHING", [collection]);
-    const result = await client.query('SELECT data FROM app_collections WHERE collection_name = $1 FOR UPDATE', [collection]);
-    const items = result.rows[0].data; change(items);
-    await client.query('UPDATE app_collections SET data = $2::jsonb, updated_at = NOW() WHERE collection_name = $1', [collection, JSON.stringify(items)]);
+    const result=await work(client);
     await client.query('COMMIT');
+    return result;
   } catch (err) {
     if (!connectionError) {
       try { await client.query('ROLLBACK'); } catch (rollbackError) { connectionError = rollbackError; }

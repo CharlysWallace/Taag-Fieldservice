@@ -24,3 +24,5 @@ jobs:
       - run: node --check public/app.js
       - run: node --check public/features.js
       - run: node --test test/workflows.test.js
+      - run: npm install --no-save --package-lock=false @electric-sql/pglite@0.5.8
+      - run: node --test test/order-storage.test.js

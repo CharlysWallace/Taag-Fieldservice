@@ -177,7 +177,7 @@ test('queda de conexão durante gravação não encerra o processo e descarta o 
   client.release=err=>{released=err;};
   class Pool extends EventEmitter {async connect(){return client;}}
   const module={exports:{}};
-  vm.runInNewContext(source,{module,exports:module.exports,require:name=>name==='pg'?{Pool}:require(name),process:{env:{DATABASE_URL:'postgres://example.test/test'}},__dirname:path.join(__dirname,'../src'),console});
+  vm.runInNewContext(source,{module,exports:module.exports,require:name=>name==='pg'?{Pool}:name==='./order-storage'?require('../src/order-storage'):require(name),process:{env:{DATABASE_URL:'postgres://example.test/test'}},__dirname:path.join(__dirname,'../src'),console});
   await assert.rejects(module.exports.mutateCollection('ordens_servico',()=>{}),err=>err===failure);
   assert.ok(released instanceof Error);assert.equal(client.listenerCount('error'),0);
   assert.equal(queries.includes('ROLLBACK'),failRollback);
