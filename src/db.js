@@ -123,6 +123,10 @@ async function mutateCollection(collection, change) {
     return;
   }
   const client = await getPool().connect();
+  // Conexões em uso não possuem o listener de erros das conexões ociosas do pool.
+  let connectionError = null;
+  const onClientError = err => { connectionError = err; };
+  client.on('error', onClientError);
   try {
     await client.query('BEGIN');
     await client.query("INSERT INTO app_collections (collection_name, data) VALUES ($1, '[]'::jsonb) ON CONFLICT DO NOTHING", [collection]);
@@ -130,7 +134,15 @@ async function mutateCollection(collection, change) {
     const items = result.rows[0].data; change(items);
     await client.query('UPDATE app_collections SET data = $2::jsonb, updated_at = NOW() WHERE collection_name = $1', [collection, JSON.stringify(items)]);
     await client.query('COMMIT');
-  } catch (err) { await client.query('ROLLBACK'); throw err; } finally { client.release(); }
+  } catch (err) {
+    if (!connectionError) {
+      try { await client.query('ROLLBACK'); } catch (rollbackError) { connectionError = rollbackError; }
+    }
+    throw err;
+  } finally {
+    client.release(connectionError || undefined);
+    client.removeListener('error', onClientError);
+  }
 }
 
 module.exports = {

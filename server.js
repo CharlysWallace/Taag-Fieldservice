@@ -105,7 +105,8 @@ app.get(/^(?!\/api\/).*/, (req, res) => {
 // captura erros que passaram batido pelas rotas, pra nunca devolver um HTML de stack trace
 app.use((err, req, res, next) => {
   console.error('[server] Falha:', err.name, err.status || 500);
-  res.status(500).json({ erro: 'Erro interno do servidor.' });
+  if(err.type==='entity.too.large')return res.status(413).json({erro:'As imagens excederam o tamanho permitido para salvar de uma vez. Salve menos fotos por edição.'});
+  res.status(500).json({ erro: 'Não foi possível salvar no servidor. Tente novamente em instantes.' });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -80,8 +80,18 @@ router.patch('/:id/report',requireRole('TECNICO'),wrap(async(req,res)=>{
   });res.json({os:await related(os)});
 }));
 router.post('/:id/fotos',requireRole('TECNICO'),wrap(async(req,res)=>{
-  const {categoria,dataUrl}=req.body || {};if(!categories.includes(categoria) || !imageOK(dataUrl))fail(400,'Envie uma imagem válida de até aproximadamente 5 MB.');let fotos;
-  await mutateCollection('ordens_servico',items=>{const os=find(items,req.params.id);responsible(os,req);if(os.status!=='EM_ANDAMENTO')fail(409,'Fotos só podem ser anexadas durante o atendimento; para relatório concluído use a edição do relatório.');os.fotos ||= [];os.fotos.push({id:genId('foto'),categoria,src:dataUrl,descricao:'',criadoEm:new Date().toISOString()});fotos=os.fotos;});res.status(201).json({fotos});
+  const {categoria,dataUrl,uploadId,compact}=req.body || {};
+  if(!categories.includes(categoria) || !imageOK(dataUrl))fail(400,'Envie uma imagem válida de até aproximadamente 5 MB.');
+  if(uploadId!==undefined && (typeof uploadId!=='string'||!/^[a-zA-Z0-9-]{1,80}$/.test(uploadId)))fail(400,'Identificação do envio inválida.');
+  let fotos,foto;
+  await mutateCollection('ordens_servico',items=>{
+    const os=find(items,req.params.id);responsible(os,req);
+    if(os.status!=='EM_ANDAMENTO')fail(409,'Fotos só podem ser anexadas durante o atendimento; para relatório concluído use a edição do relatório.');
+    os.fotos ||= [];
+    foto=uploadId && os.fotos.find(f=>f.uploadId===uploadId);
+    if(!foto){foto={id:genId('foto'),...(uploadId?{uploadId}:{}),categoria,src:dataUrl,descricao:'',criadoEm:new Date().toISOString()};os.fotos.push(foto);}
+    fotos=os.fotos;
+  });res.status(201).json(compact?{foto}:{fotos});
 }));
 router.delete('/:id/fotos/:fotoId',requireRole('TECNICO'),wrap(async(req,res)=>{
   let fotos;
