@@ -122,6 +122,18 @@ test('equipes, edições ilimitadas, acesso gerencial, recuperação e exclusõe
   assert.equal((await req('first',base+'/fotos','POST',{categoria:'EVIDENCIA',dataUrl:image,uploadId:'test-photo-0',compact:true})).status,403);
   await req('admin',base,'DELETE');
  });
+ await t.test('perfil privado, documentos validados e habilitação opcional',async()=>{
+  const body={nome:'Técnico Atualizado',dataNascimento:'1990-02-28',rg:'12345678',cpf:'123.456.789-01',habilitado:true,foto:{nome:'foto.png',dataUrl:image},cnh:{nome:'habilitacao.pdf',dataUrl:'data:application/pdf;base64,'+Buffer.from('%PDF-1.4 teste').toString('base64')}};
+  assert.equal((await request('/perfil')).status,401);
+  for(const role of ['admin','viewer'])assert.equal((await req(role,'/perfil')).status,403);
+  const saved=await req('outside','/perfil','PUT',body);assert.equal(saved.status,200);assert.equal(saved.data.perfil.cpf,'12345678901');assert.ok(saved.data.perfil.cnh);
+  assert.equal((await req('outside','/perfil')).data.perfil.nome,body.nome);
+  assert.equal((await req('first','/perfil?tecnicoId=t3')).data.perfil.cpf,'');
+  const publicTech=(await req('first','/tecnicos')).data.tecnicos.find(t=>t.id==='t3');assert.equal(publicTech.nome,body.nome);assert.equal(publicTech.cpf,undefined);assert.equal(publicTech.cnh,undefined);
+  for(const patch of [{dataNascimento:'2025-02-30'},{dataNascimento:'2999-01-01'},{cpf:'123'},{habilitado:'sim'},{nome:'<script>'},{foto:{nome:'a.png',dataUrl:'data:image/png;base64,YWJj'}}])assert.equal((await req('outside','/perfil','PUT',{...body,...patch})).status,400);
+  const noLicense=await req('outside','/perfil','PUT',{...body,habilitado:false,foto:null});assert.equal(noLicense.status,200);assert.equal(noLicense.data.perfil.cnh,null);assert.equal(noLicense.data.perfil.foto,null);
+  const av=await req('outside','/os/avulso','POST',{cliente:{nome:'Sem serviço repetido',endereco:'Rua',tipoSistema:'Rede'},chegada:'2026-10-08T10:00:00.000Z',saida:'2026-10-08T11:00:00.000Z',data:'2026-10-08',hora:'07:00'});assert.equal(av.status,201);await req('admin','/os/'+av.data.os.id,'DELETE');
+ });
  await t.test('pedido exige aprovação + token, uso único invalida sessões antigas',async()=>{
   const reset=(await request('/password/request','POST',{email:'first@example.test'})).data;
   assert.equal((await request('/password/complete','POST',{...reset,novaSenha:'Replacement-567'})).status,403);

@@ -498,3 +498,32 @@ input[type=range]{ width:100%; margin-top:18px; accent-color:var(--accent); }
 
 .avulso-team{grid-column:1/-1;min-width:0;border:1px solid var(--border);border-radius:12px;padding:16px;margin:8px 0;}
 .avulso-team legend{font-weight:700;color:var(--accent);padding:0 8px;}
+
+/* Dates share the same geometry on desktop and mobile, including Safari. */
+.field{min-width:0;}
+.field input[type="date"],.field input[type="time"],.field input[type="datetime-local"],.field input[type="month"],#avulsoForm input[type="datetime-local"]{box-sizing:border-box;display:block;width:100%;min-width:0;max-width:100%;height:48px;min-height:48px;padding:12px;font:inherit;font-size:15px;line-height:22px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);color-scheme:dark;appearance:none;-webkit-appearance:none;}
+.field input::-webkit-date-and-time-value{text-align:left;min-height:22px;}
+.field input::-webkit-datetime-edit{padding:0;}
+.topbar .home-btn{width:auto;white-space:nowrap;padding:9px 12px;font-size:13px;gap:5px;}
+.topbar h1{min-width:0;}
+.profile-page{max-width:980px;margin:0 auto;}
+.profile-identity{border:1px solid var(--border);border-radius:20px;overflow:hidden;background:var(--surface);margin-bottom:22px;}
+.profile-cover{height:140px;background:linear-gradient(115deg,#432b15,#b67025 60%,#efb44b);padding:22px;color:#fff4da;font-weight:700;letter-spacing:2px;font-size:12px;}
+.profile-heading{display:flex;align-items:center;gap:20px;padding:0 24px 12px;margin-top:-32px;position:relative;}
+.profile-heading h2{margin:34px 0 5px;overflow-wrap:anywhere;}
+.profile-heading p{color:var(--text-muted);margin:0;}
+.profile-avatar{width:112px;height:112px;flex-shrink:0;border:5px solid var(--surface);border-radius:50%;background:var(--surface-2);display:grid;place-items:center;overflow:hidden;}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;}
+.profile-avatar svg{width:48px;height:48px;color:var(--accent);}
+.profile-photo-actions,.profile-document-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+.profile-photo-actions{padding:8px 24px 20px;}
+.profile-form h2{margin-top:0;}
+.profile-private,.profile-document p{color:var(--text-muted);font-size:13px;overflow-wrap:anywhere;}
+.profile-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}
+.profile-document{border:1px solid var(--border);padding:16px;border-radius:12px;margin-bottom:16px;}
+.profile-document[hidden]{display:none;}
+#profileMessage{overflow-wrap:anywhere;}
+@media(max-width:600px){.profile-fields{grid-template-columns:1fr;}.profile-heading{padding-left:16px;gap:12px;}.profile-avatar{width:88px;height:88px;}.profile-heading h2{font-size:20px;}.profile-photo-actions{padding:8px 16px 16px;}.profile-cover{height:120px;}}
+
+.topbar:has(.home-btn){grid-template-columns:auto minmax(0,1fr) auto;}
+.field input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),.field select{box-sizing:border-box;min-height:48px;}
