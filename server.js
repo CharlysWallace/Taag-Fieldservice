@@ -86,6 +86,7 @@ app.all('/api/help/*', (req,res)=>res.status(404).json({erro:'Recurso removido.'
 app.use('/api/dashboard', require('./src/routes/dashboard.routes'));
 app.use('/api/os', osRoutes);
 app.use('/api/tecnicos', tecnicosRoutes);
+app.use('/api/perfil', require('./src/routes/profile.routes'));
 app.use('/api/notificacoes', notificationsRoutes);
 
 // checagem simples de saúde do servidor (útil para monitoramento/deploy)

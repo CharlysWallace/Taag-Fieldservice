@@ -130,7 +130,7 @@ function back() {
 }
 async function logout() {
   try { await apiLogout(); } catch (e) { toast('Não foi possível sair. Verifique a conexão e tente novamente.'); return; }
-  dashboardData = null; reportDraft = null; photoDescriptionDrafts.clear();
+  dashboardData = null; reportDraft = null; personalProfile=null; profileChanges={}; photoDescriptionDrafts.clear();
   state.role = null; state.currentUser = null; state.currentTech = null; state.history = [];
   CLIENTES = []; ACCESS_CACHE = []; OS_LIST = []; TECNICOS = []; PENDING_CACHE = []; NOTIF_CACHE = { naoLidas: 0, notificacoes: [] };
   Object.assign(agendaFilters, { cliente: '', inicio: '', fim: '', status: '' });
@@ -182,7 +182,7 @@ function iconEye(off){ return off
 }
 
 /* ---------- 4. TOPBAR REUTILIZÁVEL ---------- */
-function topbar(title, {showBack=true, rolePill=true, settings=false, settingsBadge=0} = {}){
+function topbar(title, {showBack=true, rolePill=true, settings=false, settingsBadge=0, home=false} = {}){
   const leftSlot = showBack
     ? `<button class="icon-btn back-btn" data-nav="back" aria-label="Voltar para a tela anterior">${iconBack()}<span>Voltar</span></button>`
     : (settings
@@ -192,6 +192,7 @@ function topbar(title, {showBack=true, rolePill=true, settings=false, settingsBa
   <div class="topbar">
     ${leftSlot}
     <h1>${title}</h1>
+    ${home?`<button class="icon-btn home-btn" data-nav="${rootScreenFor(state.role)}" aria-label="Ir para o início">⌂ Início</button>`:""}
 
   </div>`;
 }
@@ -379,7 +380,7 @@ function screenTechExec(){
   return `
   ${topbar('Execução do serviço')}
   <div class="screen">
-    <div class="field"><label for="reportService">Tipo de serviço prestado</label><input id="reportService" type="text" maxlength="300" required value="${escapeHtml(o.servicoRascunho ?? (o.tipoServico==='PERSONALIZADO'?o.tipoServicoPersonalizado:serviceLabel(o.tipoServico).replace(/^[^\p{L}\p{N}]+/u,'')))}"><small>Você pode alterar o serviço enquanto preenche o relatório.</small></div><div class="section-label">Descrição do atendimento</div>
+    ${o.origem==='AVULSO'?'':`<div class="field"><label for="reportService">Tipo de serviço prestado</label><input id="reportService" type="text" maxlength="300" required value="${escapeHtml(o.servicoRascunho ?? (o.tipoServico==='PERSONALIZADO'?o.tipoServicoPersonalizado:serviceLabel(o.tipoServico).replace(/^[^\p{L}\p{N}]+/u,'')))}"><small>Você pode alterar o serviço enquanto preenche o relatório.</small></div>`}<div class="section-label">Descrição do atendimento</div>
     <div class="desc-row">
       <div class="field">
         <textarea id="descField" placeholder="Descreva o serviço realizado…">${escapeHtml(o.descricao||'')}</textarea>
@@ -414,7 +415,7 @@ function screenTechSignature(){
 function screenTechReport(){
   const o = findOS(state.params.id);
   return `
-  ${topbar('Relatório')}
+  ${topbar('Relatório',{home:true})}
   <div class="screen">
     <div class="report-header">
       <div class="stamp">✓ Atendimento concluído</div>
@@ -512,7 +513,7 @@ function screenAdminPanel(){
 function screenAdminDetail(){
   const o = findOS(state.params.id);
   return `
-  ${topbar('Relatório do atendimento')}
+  ${topbar('Relatório do atendimento',{home:o.status==='CONCLUIDO'})}
   <div class="screen">
     <div class="report-header">
       <div class="stamp">✓ Atendimento concluído</div>
@@ -651,7 +652,7 @@ function screenDashboard(){
 function screenViewDetail(){
   const o = findOS(state.params.id);
   return `
-  ${topbar('Detalhe da OS')}
+  ${topbar('Detalhe da OS',{home:o.status==='CONCLUIDO'})}
   <div class="screen">
     <div class="card">
       <div class="kv"><span class="k">Cliente</span><span class="v">${escapeHtml(o.cliente.nome)}</span></div>
@@ -685,6 +686,7 @@ function screenSettings(){
     </div>
 
     ${aba==='perfil' ? `
+      ${u.perfil==='TECNICO'?'<button class="btn btn-primary" id="openTechProfile">Meu perfil · Editar dados e foto</button>':''}
       <div class="card">
         <div class="kv"><span class="k">Nome</span><span class="v">${u.nome}</span></div>
         <div class="kv"><span class="k">Perfil de acesso</span><span class="v">${roleLabel(u.perfil)}</span></div>
@@ -1237,7 +1239,8 @@ function setupSignaturePad(canvas, osId){
       reportDraft = null;
       updateOsCache(os);
       toast('Atendimento concluído');
-      nav('tech_report', { id: osId });
+      state.history=state.history.filter(item=>!['tech_exec','tech_signature'].includes(item.view));
+      state.view='tech_report';state.params={id:osId};render();
     }catch(err){
       toast(err.message || 'Não foi possível concluir o atendimento.');
       finishBtn.disabled = false; finishBtn.textContent = 'Concluir atendimento';

@@ -10,6 +10,7 @@ function ownsReport(o) { return state.role==='TECNICO' && (o.responsavelUsuarioI
 function prepareFeatures() {
   VIEWS.password=screenPassword;
   VIEWS.tech_avulso=screenAvulso;
+  VIEWS.tech_profile=screenProfile;
   VIEWS.pending_registration=()=>`<div class="screen"><h1>Cadastro aguardando aprovação</h1><p>Sua solicitação foi enviada. O acesso ao sistema só será liberado após a validação do administrador.</p><button class="btn btn-primary" data-nav="login">Voltar ao login</button></div>`;
   VIEWS.reset_admin=()=>`${topbar('Redefinições de senha')}<div class="screen"><p>Confirme a identidade da pessoa e o protocolo por um contato conhecido antes de aprovar.</p><button class="btn btn-outline" id="loadResets">Atualizar solicitações</button><div id="resetList" aria-live="polite"></div></div>`;
   VIEWS.team_progress=()=>{const o=findOS(state.params.id);return `${topbar('Atendimento da equipe')}<div class="screen"><h2>${escapeHtml(o.cliente.nome)}</h2><p>Equipe: ${escapeHtml(o.tecnicoNome)}</p><p>Responsável pelo relatório: ${escapeHtml(o.responsavelNome)}</p><p>Somente o responsável pelo relatório pode preenchê-lo e editá-lo.</p><button class="btn btn-primary" id="refreshTeam">Atualizar atendimento</button></div>`;};
@@ -77,6 +78,7 @@ function monthlyPDF() {
 }
 
 function bindFeatures() {
+ bindProfile();
  if(['tech_report','admin_detail','view_detail'].includes(state.view)){
   const o=findOS(state.params.id);
   if(o?.status==='CONCLUIDO'&&o.editadoEm){
@@ -89,7 +91,7 @@ function bindFeatures() {
  const avulso=document.getElementById('avulsoForm');if(avulso)avulso.onsubmit=async e=>{
   e.preventDefault();const button=avulso.querySelector('[type="submit"]');button.disabled=true;
   try{const v=id=>document.getElementById(id).value.trim(),chegada=v('avChegada'),saida=v('avSaida');
-   const {os}=await api('/os/avulso',{method:'POST',body:{tecnicoIds:[...avulso.querySelectorAll('[name=avTecnico]:checked')].map(el=>el.value),cliente:{nome:v('avNome'),endereco:v('avEndereco'),telefone:v('avTelefone'),tipoSistema:v('avSistema')},servico:v('avServico'),chegada:new Date(chegada).toISOString(),saida:new Date(saida).toISOString(),data:chegada.slice(0,10),hora:chegada.slice(11,16)}});
+   const {os}=await api('/os/avulso',{method:'POST',body:{tecnicoIds:[...avulso.querySelectorAll('[name=avTecnico]:checked')].map(el=>el.value),cliente:{nome:v('avNome'),endereco:v('avEndereco'),telefone:v('avTelefone'),tipoSistema:v('avSistema')},chegada:new Date(chegada).toISOString(),saida:new Date(saida).toISOString(),data:chegada.slice(0,10),hora:chegada.slice(11,16)}});
    updateOsCache(os);nav('tech_exec',{id:os.id});
   }catch(err){document.getElementById('avError').textContent=err.message;button.disabled=false;}
  };
@@ -179,6 +181,6 @@ function bindPhotoDescriptions(){
 
 function screenAvulso(){
  if(state.role!=='TECNICO')return '<div class="screen">Acesso restrito ao técnico.</div>';
- const fields=[['avNome','Cliente','text',180],['avEndereco','Endereço','text',700],['avTelefone','Telefone (opcional)','tel',80],['avSistema','Tipo do sistema','text',500],['avServico','Serviço prestado','text',300],['avChegada','Data e horário de chegada','datetime-local',40],['avSaida','Data e horário de saída','datetime-local',40]];
+ const fields=[['avNome','Cliente','text',180],['avEndereco','Endereço','text',700],['avTelefone','Telefone (opcional)','tel',80],['avSistema','Tipo do sistema','text',500],['avChegada','Data e horário de chegada','datetime-local',40],['avSaida','Data e horário de saída','datetime-local',40]];
  return `${topbar('Relatório sem agendamento')}<div class="screen"><p>Informe o atendimento realizado. Depois, preencha o relatório e finalize; as fotos e a assinatura são opcionais. Os dados do cliente serão registrados somente neste atendimento.</p><form id="avulsoForm" class="card client-form">${fields.map(([id,label,type,max])=>`<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" maxlength="${max}" ${id==='avTelefone'?'':'required'}></div>`).join('')}<fieldset class="avulso-team"><legend>Equipe do atendimento</legend><p>Selecione a equipe. Você ficará responsável por preencher e editar o relatório; os demais poderão acompanhar.</p><div class="team-options">${TECNICOS.map(t=>`<label><input type="checkbox" name="avTecnico" value="${escapeHtml(t.id)}" ${t.id===state.currentUser.tecnicoId?'checked disabled':''}>${escapeHtml(t.nome)}${t.id===state.currentUser.tecnicoId?' (você)':''}</label>`).join('')}</div></fieldset><p id="avError" role="alert"></p><button class="btn btn-primary" type="submit">Continuar para o relatório</button></form></div>`;
 }

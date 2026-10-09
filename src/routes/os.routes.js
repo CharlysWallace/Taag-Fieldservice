@@ -35,12 +35,12 @@ router.post('/avulso',requireRole('TECNICO'),wrap(async(req,res)=>{
     const v=b.cliente?.[key]??'';if(typeof v!=='string'||v.length>max)fail(400,'Dados do cliente inválidos.');cliente[key]=v.trim();
   }
   if(!cliente.nome||!cliente.endereco||!cliente.tipoSistema)fail(400,'Informe cliente, endereço e sistema.');
-  if(typeof b.servico!=='string'||!b.servico.trim()||b.servico.length>300)fail(400,'Informe o serviço em até 300 caracteres.');
+  if(b.servico!==undefined&&(typeof b.servico!=='string'||!b.servico.trim()||b.servico.length>300))fail(400,'Informe o serviço em até 300 caracteres.');
   const dates=[b.chegada,b.saida];
   if(dates.some(v=>typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)||!Number.isFinite(Date.parse(v))))fail(400,'Informe horários válidos.');
   if(Date.parse(b.saida)<Date.parse(b.chegada))fail(400,'A saída não pode ser anterior à chegada.');
   if(typeof b.data!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(b.data)||typeof b.hora!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(b.hora))fail(400,'Data ou horário inválido.');
-  const os={id:genId('os'),origem:'AVULSO',clienteId:null,clienteSnapshot:cliente,tecnicoId:req.session.tecnicoId,tecnicoIds,responsavelUsuarioId:req.session.userId,responsavelTecnicoId:req.session.tecnicoId,tipoServico:'PERSONALIZADO',tipoServicoPersonalizado:b.servico.trim(),data:b.data,hora:b.hora,status:'EM_ANDAMENTO',descricao:'',camposServico:{sistemaCliente:cliente.tipoSistema},fotos:[],assinatura:null,checkin:{timestamp:b.chegada,manual:true},saidaInformada:b.saida,checkout:null,edicoesRelatorio:0};
+  const os={id:genId('os'),origem:'AVULSO',clienteId:null,clienteSnapshot:cliente,tecnicoId:req.session.tecnicoId,tecnicoIds,responsavelUsuarioId:req.session.userId,responsavelTecnicoId:req.session.tecnicoId,tipoServico:'PERSONALIZADO',tipoServicoPersonalizado:b.servico?.trim()||'Atendimento sem agendamento',data:b.data,hora:b.hora,status:'EM_ANDAMENTO',descricao:'',camposServico:{sistemaCliente:cliente.tipoSistema},fotos:[],assinatura:null,checkin:{timestamp:b.chegada,manual:true},saidaInformada:b.saida,checkout:null,edicoesRelatorio:0};
   await mutateCollection('ordens_servico',items=>items.push(os));res.status(201).json({os:await related(os)});
 }));
 router.post('/',requireRole('ADMIN'),wrap(async(req,res)=>{
